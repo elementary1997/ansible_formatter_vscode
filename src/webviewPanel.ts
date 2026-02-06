@@ -62,7 +62,7 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                     vscode.commands.executeCommand('ansible-lint.fixAll');
                     break;
                 case 'ignoreRule':
-                    vscode.commands.executeCommand('ansible-lint.ignoreRule', data.rule);
+                    vscode.commands.executeCommand('ansible-lint.ignoreRule', data.rule, data.source);
                     break;
                 case 'refresh':
                     vscode.commands.executeCommand('ansible-lint.run');

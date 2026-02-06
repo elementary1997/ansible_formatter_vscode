@@ -187,9 +187,11 @@ export class CodeActionsProvider implements vscode.CodeActionProvider {
 }
 
 /**
- * Команда для игнорирования правила - добавляет в .ansible-lint
+ * Команда для игнорирования правила - добавляет в соответствующий конфиг
+ * @param rule - имя правила
+ * @param source - источник правила (yamllint, ansible-lint, pre-commit)
  */
-export async function ignoreRule(rule: string): Promise<void> {
+export async function ignoreRule(rule: string, source?: string): Promise<void> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
 
     if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -198,17 +200,86 @@ export async function ignoreRule(rule: string): Promise<void> {
     }
 
     const workspaceRoot = workspaceFolders[0].uri.fsPath;
-    const ansibleLintPath = path.join(workspaceRoot, '.ansible-lint');
 
     try {
-        let content = '';
-
-        // Читаем существующий файл если есть
-        if (fs.existsSync(ansibleLintPath)) {
-            content = fs.readFileSync(ansibleLintPath, 'utf8');
+        // Определяем какой файл редактировать в зависимости от источника
+        if (source === 'yamllint') {
+            await ignoreYamllintRule(workspaceRoot, rule);
+        } else if (source === 'pre-commit') {
+            vscode.window.showInformationMessage(
+                `Pre-commit rules cannot be ignored via config. Edit .pre-commit-config.yaml manually to disable hook "${rule}".`
+            );
+            return;
         } else {
-            // Создаем новый файл с базовой структурой
-            content = `---
+            // По умолчанию ansible-lint
+            await ignoreAnsibleLintRule(workspaceRoot, rule);
+        }
+
+        // Перезапускаем проверку чтобы ошибка исчезла из списка
+        await vscode.commands.executeCommand('ansible-lint.run');
+
+    } catch (error: any) {
+        vscode.window.showErrorMessage(`Failed to update config: ${error.message}`);
+    }
+}
+
+/**
+ * Добавляет правило в .yamllint ignore
+ */
+async function ignoreYamllintRule(workspaceRoot: string, rule: string): Promise<void> {
+    const yamllintPath = path.join(workspaceRoot, '.yamllint');
+
+    let content = '';
+
+    if (fs.existsSync(yamllintPath)) {
+        content = fs.readFileSync(yamllintPath, 'utf8');
+    } else {
+        // Создаем базовый конфиг
+        content = `---
+extends: default
+
+rules:
+`;
+    }
+
+    // Проверяем есть ли секция rules
+    if (!content.includes('rules:')) {
+        content += '\nrules:\n';
+    }
+
+    // Проверяем не отключено ли уже правило
+    const ruleDisabledPattern = new RegExp(`${rule}:\\s*(disable|false)`, 'i');
+    if (ruleDisabledPattern.test(content)) {
+        vscode.window.showInformationMessage(`Rule ${rule} is already disabled in .yamllint`);
+        return;
+    }
+
+    // Добавляем правило в секцию rules как disabled
+    // Находим позицию после "rules:" и добавляем туда
+    const rulesMatch = content.match(/rules:\s*\n/);
+    if (rulesMatch) {
+        const insertPos = rulesMatch.index! + rulesMatch[0].length;
+        content = content.slice(0, insertPos) + `  ${rule}: disable\n` + content.slice(insertPos);
+    } else {
+        content += `  ${rule}: disable\n`;
+    }
+
+    fs.writeFileSync(yamllintPath, content, 'utf8');
+    vscode.window.showInformationMessage(`Rule ${rule} disabled in .yamllint`);
+}
+
+/**
+ * Добавляет правило в .ansible-lint skip_list
+ */
+async function ignoreAnsibleLintRule(workspaceRoot: string, rule: string): Promise<void> {
+    const ansibleLintPath = path.join(workspaceRoot, '.ansible-lint');
+
+    let content = '';
+
+    if (fs.existsSync(ansibleLintPath)) {
+        content = fs.readFileSync(ansibleLintPath, 'utf8');
+    } else {
+        content = `---
 profile: production
 
 exclude_paths:
@@ -219,35 +290,23 @@ exclude_paths:
 
 skip_list:
 `;
-        }
-
-        // Проверяем, есть ли уже skip_list
-        if (!content.includes('skip_list:')) {
-            content += '\nskip_list:\n';
-        }
-
-        // Извлекаем имя правила из формата yaml[trailing-spaces]
-        const ruleMatch = rule.match(/^([^[]+)\[?([^\]]*)\]?$/);
-        const ruleName = ruleMatch ? `${ruleMatch[1]}[${ruleMatch[2]}]` : rule;
-
-        // Проверяем, не добавлено ли уже это правило
-        if (content.includes(`- ${ruleName}`)) {
-            vscode.window.showInformationMessage(`Rule ${ruleName} is already in skip_list`);
-            return;
-        }
-
-        // Добавляем правило в skip_list
-        content += `  - ${ruleName}\n`;
-
-        // Записываем файл
-        fs.writeFileSync(ansibleLintPath, content, 'utf8');
-
-        vscode.window.showInformationMessage(`Rule ${ruleName} added to .ansible-lint skip_list`);
-
-        // Перезапускаем проверку чтобы ошибка исчезла из списка
-        await vscode.commands.executeCommand('ansible-lint.run');
-
-    } catch (error: any) {
-        vscode.window.showErrorMessage(`Failed to update .ansible-lint: ${error.message}`);
     }
+
+    if (!content.includes('skip_list:')) {
+        content += '\nskip_list:\n';
+    }
+
+    // Извлекаем имя правила
+    const ruleMatch = rule.match(/^([^[]+)\[?([^\]]*)\]?$/);
+    const ruleName = ruleMatch && ruleMatch[2] ? `${ruleMatch[1]}[${ruleMatch[2]}]` : rule;
+
+    if (content.includes(`- ${ruleName}`)) {
+        vscode.window.showInformationMessage(`Rule ${ruleName} is already in .ansible-lint skip_list`);
+        return;
+    }
+
+    content += `  - ${ruleName}\n`;
+
+    fs.writeFileSync(ansibleLintPath, content, 'utf8');
+    vscode.window.showInformationMessage(`Rule ${ruleName} added to .ansible-lint skip_list`);
 }
