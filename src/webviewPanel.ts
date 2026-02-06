@@ -255,10 +255,10 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 10px;
+            padding: 5px 8px;
             background: var(--vscode-editor-background);
             border-radius: 3px;
-            margin-bottom: 5px;
+            margin-bottom: 3px;
             cursor: pointer;
             user-select: none;
         }
@@ -296,8 +296,8 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         }
 
         .error-item {
-            padding: 5px 10px;
-            margin: 2px 0;
+            padding: 4px 8px;
+            margin: 1px 0;
             background: var(--vscode-editor-background);
             border-left: 3px solid var(--vscode-errorForeground);
             cursor: pointer;
@@ -354,9 +354,9 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         .error-header-compact {
             display: flex;
             align-items: center;
-            margin-bottom: 4px;
-            gap: 6px;
-            font-size: 0.85em;
+            margin-bottom: 2px;
+            gap: 5px;
+            font-size: 0.8em;
         }
 
         .error-title {
@@ -426,9 +426,9 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         }
 
         .error-detailed-message {
-            font-size: 0.85em;
-            line-height: 1.4;
-            padding: 8px 0;
+            font-size: 0.8em;
+            line-height: 1.3;
+            padding: 2px 0;
             color: var(--vscode-foreground);
             white-space: pre-line;
             cursor: pointer;
@@ -453,8 +453,8 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
 
         .error-actions {
             display: flex;
-            gap: 8px;
-            margin-top: 4px;
+            gap: 6px;
+            margin-top: 2px;
             flex-wrap: wrap;
         }
 
