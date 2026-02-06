@@ -213,36 +213,6 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             background: var(--vscode-button-background);
         }
 
-        .sort-bar {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 10px;
-            padding: 8px;
-            background: var(--vscode-editor-background);
-            border-radius: 4px;
-            font-size: 0.85em;
-        }
-
-        .sort-bar label {
-            color: var(--vscode-descriptionForeground);
-        }
-
-        .sort-bar select {
-            background: var(--vscode-dropdown-background);
-            color: var(--vscode-dropdown-foreground);
-            border: 1px solid var(--vscode-dropdown-border);
-            padding: 4px 8px;
-            border-radius: 3px;
-            font-size: 0.9em;
-            cursor: pointer;
-            flex: 1;
-        }
-
-        .sort-bar select:hover {
-            border-color: var(--vscode-focusBorder);
-        }
-
         .error-group {
             margin-bottom: 15px;
         }
@@ -507,15 +477,6 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             border-left: 3px solid var(--vscode-editorInfo-foreground);
         }
 
-        .source-divider {
-            padding: 8px 12px;
-            margin: 8px 0;
-            font-weight: bold;
-            font-size: 0.85em;
-            color: var(--vscode-descriptionForeground);
-            border-top: 1px solid var(--vscode-panel-border);
-            border-bottom: 1px solid var(--vscode-panel-border);
-        }
     </style>
 </head>
 <body>
@@ -528,14 +489,6 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             <button onclick="fixAll()" title="Fix all files">Fix All</button>
             <button onclick="openSettings()" title="Open Settings" class="settings-btn">⚙️</button>
         </div>
-    </div>
-    <div class="sort-bar">
-        <label>Sort by:</label>
-        <select id="sortSelect" onchange="applySorting()">
-            <option value="source">Source (yamllint → pre-commit → ansible-lint)</option>
-            <option value="severity">Severity (Errors → Warnings → Info)</option>
-            <option value="line">Line number</option>
-        </select>
     </div>
 
     <div id="errors-container">
@@ -550,18 +503,13 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
 
     <script>
         const vscode = acquireVsCodeApi();
-        let currentErrors = []; // Храним текущие ошибки для пересортировки
 
         // Восстанавливаем сохраненное состояние при загрузке
         window.addEventListener('load', () => {
             const state = vscode.getState();
             if (state && state.errors) {
                 console.log('[Webview] Restoring state:', state.errors.length, 'errors');
-                currentErrors = state.errors;
-                if (state.sortBy) {
-                    document.getElementById('sortSelect').value = state.sortBy;
-                }
-                updateErrorsUI(currentErrors);
+                updateErrorsUI(state.errors);
             }
         });
 
@@ -569,11 +517,9 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             const message = event.data;
 
             if (message.type === 'updateErrors') {
-                currentErrors = message.errors;
-                updateErrorsUI(currentErrors);
+                updateErrorsUI(message.errors);
                 // Сохраняем состояние для восстановления
-                const sortBy = document.getElementById('sortSelect').value;
-                vscode.setState({ errors: currentErrors, sortBy: sortBy });
+                vscode.setState({ errors: message.errors });
             }
         });
 
@@ -583,51 +529,20 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             return 2; // info
         }
 
-        function getSourceOrder(checkGroup) {
-            if (checkGroup === 'yamllint') return 0;
-            if (checkGroup === 'pre-commit') return 1;
-            if (checkGroup === 'ansible-lint') return 2;
-            return 3;
-        }
-
-        function sortErrors(errors, sortBy) {
-            const sorted = [...errors];
-
-            if (sortBy === 'severity') {
-                sorted.sort((a, b) => {
-                    const severityDiff = getSeverityOrder(a.severity) - getSeverityOrder(b.severity);
-                    if (severityDiff !== 0) return severityDiff;
-                    // Внутри одного severity - по файлу и строке
-                    if (a.file !== b.file) return a.file.localeCompare(b.file);
-                    return a.line - b.line;
-                });
-            } else if (sortBy === 'line') {
-                sorted.sort((a, b) => {
-                    if (a.file !== b.file) return a.file.localeCompare(b.file);
-                    return a.line - b.line;
-                });
-            } else {
-                // По умолчанию - по источнику (yamllint → pre-commit → ansible-lint)
-                sorted.sort((a, b) => {
-                    if (a.file !== b.file) return a.file.localeCompare(b.file);
-                    const sourceDiff = getSourceOrder(a.checkGroup) - getSourceOrder(b.checkGroup);
-                    if (sourceDiff !== 0) return sourceDiff;
-                    return a.line - b.line;
-                });
-            }
-
-            return sorted;
-        }
-
-        function applySorting() {
-            const sortBy = document.getElementById('sortSelect').value;
-            vscode.setState({ errors: currentErrors, sortBy: sortBy });
-            updateErrorsUI(currentErrors);
+        // Сортировка всегда по severity: Errors → Warnings → Info
+        function sortBySeverity(errors) {
+            return [...errors].sort((a, b) => {
+                const severityDiff = getSeverityOrder(a.severity) - getSeverityOrder(b.severity);
+                if (severityDiff !== 0) return severityDiff;
+                // Внутри одного severity - по файлу и строке
+                if (a.file !== b.file) return a.file.localeCompare(b.file);
+                return a.line - b.line;
+            });
         }
 
         function updateErrorsUI(errors) {
-            const sortBy = document.getElementById('sortSelect').value;
-            errors = sortErrors(errors, sortBy);
+            // Всегда сортируем по severity
+            errors = sortBySeverity(errors);
             const container = document.getElementById('errors-container');
             const stats = document.getElementById('stats');
 
@@ -686,101 +601,35 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                 \`;
             }
 
-            // Рендерим ошибки
+            // Рендерим ошибки - всегда по секциям severity
             let html = '';
-            let fileIndex = 0;
 
-            // При сортировке по severity - показываем секции по severity
-            if (sortBy === 'severity') {
-                const errorErrors = errors.filter(e => e.severity === 'error');
-                const warningErrors = errors.filter(e => e.severity === 'warning');
-                const infoErrors = errors.filter(e => e.severity !== 'error' && e.severity !== 'warning');
+            const errorErrors = errors.filter(e => e.severity === 'error');
+            const warningErrors = errors.filter(e => e.severity === 'warning');
+            const infoErrors = errors.filter(e => e.severity !== 'error' && e.severity !== 'warning');
 
-                if (errorErrors.length > 0) {
-                    html += \`<div class="severity-section"><div class="severity-header severity-error-header">❌ ERRORS (\${errorErrors.length})</div>\`;
-                    for (const error of errorErrors) {
-                        html += renderError(error);
-                    }
-                    html += '</div>';
+            if (errorErrors.length > 0) {
+                html += \`<div class="severity-section"><div class="severity-header severity-error-header">❌ ERRORS (\${errorErrors.length})</div>\`;
+                for (const error of errorErrors) {
+                    html += renderError(error);
                 }
-
-                if (warningErrors.length > 0) {
-                    html += \`<div class="severity-section"><div class="severity-header severity-warning-header">⚠️ WARNINGS (\${warningErrors.length})</div>\`;
-                    for (const error of warningErrors) {
-                        html += renderError(error);
-                    }
-                    html += '</div>';
-                }
-
-                if (infoErrors.length > 0) {
-                    html += \`<div class="severity-section"><div class="severity-header severity-info-header">ℹ️ INFO (\${infoErrors.length})</div>\`;
-                    for (const error of infoErrors) {
-                        html += renderError(error);
-                    }
-                    html += '</div>';
-                }
-
-                container.innerHTML = html;
-                return;
+                html += '</div>';
             }
 
-            // При других сортировках - группируем по файлам
-            for (const [file, fileErrors] of Object.entries(errorsByFile)) {
-                const fileName = fileErrors[0].file;
-                const fileId = 'file-' + fileIndex;
-                fileIndex++;
-
-                html += \`
-                    <div class="error-group">
-                        <div class="file-header" onclick="toggleFile('\${fileId}')" id="header-\${fileId}">
-                            <div style="display: flex; align-items: center;">
-                                <span class="collapse-icon">▼</span>
-                                <span class="file-name">📁 \${fileName}</span>
-                            </div>
-                            <span class="error-count">\${fileErrors.length} issues</span>
-                        </div>
-                        <div class="file-errors" id="\${fileId}">
-                \`;
-
-                if (sortBy === 'source') {
-                    // Группируем по checkGroup
-                    const yamllintErrors = fileErrors.filter(e => e.checkGroup === 'yamllint');
-                    const preCommitErrors = fileErrors.filter(e => e.checkGroup === 'pre-commit');
-                    const ansibleErrors = fileErrors.filter(e => e.checkGroup === 'ansible-lint');
-                    const otherErrors = fileErrors.filter(e => !e.checkGroup);
-
-                    if (yamllintErrors.length > 0) {
-                        html += '<div class="source-divider">━━━ YAMLLINT ━━━</div>';
-                        for (const error of yamllintErrors) {
-                            html += renderError(error);
-                        }
-                    }
-
-                    if (preCommitErrors.length > 0) {
-                        html += '<div class="source-divider">━━━ PRE-COMMIT ━━━</div>';
-                        for (const error of preCommitErrors) {
-                            html += renderError(error);
-                        }
-                    }
-
-                    if (ansibleErrors.length > 0) {
-                        html += '<div class="source-divider">━━━ ANSIBLE-LINT ━━━</div>';
-                        for (const error of ansibleErrors) {
-                            html += renderError(error);
-                        }
-                    }
-
-                    for (const error of otherErrors) {
-                        html += renderError(error);
-                    }
-                } else {
-                    // line или другая сортировка - просто рендерим в текущем порядке
-                    for (const error of fileErrors) {
-                        html += renderError(error);
-                    }
+            if (warningErrors.length > 0) {
+                html += \`<div class="severity-section"><div class="severity-header severity-warning-header">⚠️ WARNINGS (\${warningErrors.length})</div>\`;
+                for (const error of warningErrors) {
+                    html += renderError(error);
                 }
+                html += '</div>';
+            }
 
-                html += '</div></div>'; // Закрываем file-errors и error-group
+            if (infoErrors.length > 0) {
+                html += \`<div class="severity-section"><div class="severity-header severity-info-header">ℹ️ INFO (\${infoErrors.length})</div>\`;
+                for (const error of infoErrors) {
+                    html += renderError(error);
+                }
+                html += '</div>';
             }
 
             container.innerHTML = html;
