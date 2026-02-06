@@ -215,7 +215,7 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
 
         .error-lang-line {
             display: flex;
-            align-items: flex-start;
+            align-items: baseline;
             gap: 6px;
             font-size: 0.8em;
             line-height: 1.3;
