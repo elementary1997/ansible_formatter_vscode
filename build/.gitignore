@@ -1,0 +1,8 @@
+# Игнорировать все VSIX файлы
+*.vsix
+
+# Но не игнорировать README и скрипты
+!README.md
+!build.ps1
+!build.sh
+!.gitignore

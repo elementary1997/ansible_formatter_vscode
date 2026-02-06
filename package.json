@@ -1,14 +1,41 @@
 {
   "name": "ansible-lint-helper",
   "displayName": "Ansible Lint Helper",
-  "description": "Run pre-commit and ansible-lint with inline errors and auto-fix via Quick Fix menu",
+  "description": "Run yamllint, pre-commit and ansible-lint with inline errors and auto-fix support",
   "version": "1.0.0",
+  "publisher": "your-publisher-name",
+  "author": {
+    "name": "Your Name"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elementary1997/ansible_formatter_vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/elementary1997/ansible_formatter_vscode/issues"
+  },
+  "homepage": "https://github.com/elementary1997/ansible_formatter_vscode#readme",
+  "keywords": [
+    "ansible",
+    "yaml",
+    "lint",
+    "linter",
+    "ansible-lint",
+    "yamllint",
+    "pre-commit",
+    "formatter",
+    "ansible playbook",
+    "devops",
+    "automation"
+  ],
   "engines": {
     "vscode": "^1.60.0"
   },
   "categories": [
     "Linters",
-    "Formatters"
+    "Formatters",
+    "Programming Languages"
   ],
   "activationEvents": [
     "onLanguage:yaml",
@@ -88,11 +115,14 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "publish": "vsce publish"
   },
   "devDependencies": {
     "@types/vscode": "^1.60.0",
     "@types/node": "^14.14.37",
-    "typescript": "^4.9.5"
+    "typescript": "^4.9.5",
+    "@vscode/vsce": "^2.22.0"
   }
 }
