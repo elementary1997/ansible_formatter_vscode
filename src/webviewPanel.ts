@@ -37,6 +37,14 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
+        // Восстанавливаем ошибки если они были
+        if (this._errors.length > 0) {
+            webviewView.webview.postMessage({
+                type: 'updateErrors',
+                errors: this._serializeErrors(this._errors)
+            });
+        }
+
         // Обработка сообщений от webview
         webviewView.webview.onDidReceiveMessage(data => {
             switch (data.type) {
@@ -290,11 +298,22 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
     <script>
         const vscode = acquireVsCodeApi();
 
+        // Восстанавливаем сохраненное состояние при загрузке
+        window.addEventListener('load', () => {
+            const state = vscode.getState();
+            if (state && state.errors) {
+                console.log('[Webview] Restoring state:', state.errors.length, 'errors');
+                updateErrorsUI(state.errors);
+            }
+        });
+
         window.addEventListener('message', event => {
             const message = event.data;
 
             if (message.type === 'updateErrors') {
                 updateErrorsUI(message.errors);
+                // Сохраняем состояние для восстановления
+                vscode.setState({ errors: message.errors });
             }
         });
 
