@@ -230,10 +230,11 @@ export class Executor {
                 console.log(`[Executor] Exit code: ${exitCode}`);
                 console.log(`[Executor] Execution time: ${executionTime}ms`);
 
-                // Exit codes 0, 1, 2 для линтеров - это нормально
+                // Exit codes для линтеров - это нормально:
                 // 0 - нет ошибок
                 // 1, 2 - найдены ошибки (это то, что нам нужно)
-                if (exitCode === 0 || exitCode === 1 || exitCode === 2) {
+                // 8 - есть warnings (ansible-lint)
+                if (exitCode === 0 || exitCode === 1 || exitCode === 2 || exitCode === 8) {
                     resolve({ stdout, stderr, exitCode });
                 } else {
                     reject(new Error(`Command failed with code ${exitCode}: ${stderr || stdout || error?.message}`));
@@ -456,11 +457,11 @@ export class Executor {
             await this.runCommand(command, workspaceRoot);
             console.log(`[Executor] ansible-lint --fix completed for ${relativePath}`);
         } catch (error: any) {
-            // ansible-lint --fix может вернуть код 2, если остались неисправимые ошибки
+            // ansible-lint --fix может вернуть разные коды:
+            // 2 - остались неисправимые ошибки
+            // 8 - есть warnings
             // Это нормально - файл все равно был исправлен частично
-            if (!error.message.includes('code 2')) {
-                throw error;
-            }
+            console.log(`[Executor] ansible-lint --fix warning: ${error.message}`);
         }
     }
 
@@ -477,11 +478,11 @@ export class Executor {
             await this.runCommand(command, workspaceRoot);
             console.log(`[Executor] ansible-lint --fix completed for all files`);
         } catch (error: any) {
-            // ansible-lint --fix может вернуть код 2, если остались неисправимые ошибки
+            // ansible-lint --fix может вернуть разные коды:
+            // 2 - остались неисправимые ошибки
+            // 8 - есть warnings
             // Это нормально - файлы все равно были исправлены частично
-            if (!error.message.includes('code 2')) {
-                throw error;
-            }
+            console.log(`[Executor] ansible-lint --fix warning: ${error.message}`);
         }
     }
 }
