@@ -714,7 +714,7 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
 
                 html += \`
                     <div class="error-group">
-                        <div class="file-header" onclick="toggleFile('\${fileId}')" id="header-\${fileId}">
+                        <div class="file-header" onclick="toggleFile('\${fileId}')" id="header-\${fileId}" title="\${file}">
                             <div style="display: flex; align-items: center;">
                                 <span class="collapse-icon">▼</span>
                                 <span class="file-name">📁 \${fileName}</span>
