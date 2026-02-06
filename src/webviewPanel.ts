@@ -7,7 +7,7 @@ import * as path from 'path';
 import { LintError } from './models/lintError';
 
 export class WebviewPanel implements vscode.WebviewViewProvider {
-    public static readonly viewType = 'ansible-lint.resultsPanel';
+    public static readonly viewType = 'ansibleLintHelper.resultsView';
 
     private _view?: vscode.WebviewView;
     private _errors: LintError[] = [];

@@ -111,7 +111,7 @@
       "ansible-lint-explorer": [
         {
           "type": "webview",
-          "id": "ansible-lint.resultsPanel",
+          "id": "ansibleLintHelper.resultsView",
           "name": "Lint Results"
         }
       ]
