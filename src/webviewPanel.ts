@@ -52,7 +52,11 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                     this._gotoError(data.file, data.line);
                     break;
                 case 'fixFile':
-                    vscode.commands.executeCommand('ansible-lint.fixWithTool', data.file);
+                    if (data.file) {
+                        vscode.commands.executeCommand('ansible-lint.fixWithTool', data.file);
+                    } else {
+                        vscode.commands.executeCommand('ansible-lint.fixCurrent');
+                    }
                     break;
                 case 'fixAll':
                     vscode.commands.executeCommand('ansible-lint.fixAll');
@@ -390,10 +394,10 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
     <div class="header">
         <div class="stats" id="stats">No errors</div>
         <div class="buttons">
-            <button onclick="refresh()" title="Run checks on current file">Run</button>
+            <button onclick="refresh()" title="Check current file">Check File</button>
             <button onclick="runAll()" title="Check entire workspace">Check All</button>
+            <button onclick="fixFile()" title="Fix current file">Fix File</button>
             <button onclick="fixAll()" title="Fix all files">Fix All</button>
-            <button onclick="clear()" title="Clear results">Clear</button>
         </div>
     </div>
 
@@ -611,6 +615,12 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         function fixAll() {
             vscode.postMessage({
                 type: 'fixAll'
+            });
+        }
+
+        function fixFile() {
+            vscode.postMessage({
+                type: 'fixFile'
             });
         }
 
