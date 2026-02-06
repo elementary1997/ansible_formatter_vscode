@@ -1,17 +1,24 @@
 ---
 repos:
-  - repo: 'https://github.com/willthames/ansible-lint.git'
-    rev: v6.12.2
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
     hooks:
-      - id: ansible-lint
-        files: \.(yaml|yml)$
-        additional_dependencies:
-          - ansible
-        args: [--offline, --skip-list=galaxy]
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: ['--unsafe']
+      - id: check-added-large-files
 
-  - repo: https://github.com/adrienverge/yamllint.git
-    rev: v1.26.2
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.33.0
     hooks:
       - id: yamllint
         name: Yaml validate with yamllint
-        args: [-c=.yamllint-config.yaml]
+        args: [-c=.yamllint-config.yaml, --strict]
+
+  - repo: https://github.com/ansible/ansible-lint
+    rev: v6.22.2
+    hooks:
+      - id: ansible-lint
+        files: \.(yaml|yml)$
+        args: [--strict]

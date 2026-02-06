@@ -9,12 +9,11 @@ rules:
     check-keys: true
   comments:
     min-spaces-from-content: 1
-  # КРИТИЧНО: Строгая проверка отступов
   indentation:
     spaces: 2
     indent-sequences: true
     check-multi-line-strings: false
-  # Строгие правила для отступов
+  # СТРОГИЕ правила для отступов
   brackets:
     max-spaces-inside: 1
   colons:
@@ -25,11 +24,9 @@ rules:
     min-spaces-after: 1
   hyphens:
     max-spaces-after: 1
-  # Проверка пустых значений
   empty-values:
     forbid-in-block-mappings: true
     forbid-in-flow-mappings: true
-  # Дополнительные строгие правила
+  # Строгие правила для отступов внутри блоков
   key-duplicates: enable
   trailing-spaces: enable
-  new-line-at-end-of-file: enable
