@@ -317,12 +317,27 @@ export class IndentFixer {
         console.log(`[IndentFixer] Creating temp file: ${tempFilePath}`);
         fs.writeFileSync(tempFilePath, text);
 
+        // Настраиваем PATH для поиска ansible-lint
+        const extraPaths = [
+            `${process.env.HOME}/.local/bin`,
+            `${rootPath}/venv/bin`,
+            `${rootPath}/../venv/bin`,
+            '/usr/local/bin',
+            '/usr/bin'
+        ].filter(p => p).join(path.delimiter);
+        
+        const env = {
+            ...process.env,
+            PATH: `${extraPaths}${path.delimiter}${process.env.PATH}`
+        };
+
         try {
             await new Promise<void>((resolve, reject) => {
                 const cmd = `ansible-lint --fix "${tempFileName}"`;
                 console.log(`[IndentFixer] Running: ${cmd}`);
+                console.log(`[IndentFixer] PATH: ${env.PATH}`);
                 
-                cp.exec(cmd, { cwd: rootPath, timeout: 30000 }, (error, stdout, stderr) => {
+                cp.exec(cmd, { cwd: rootPath, timeout: 30000, env }, (error, stdout, stderr) => {
                     console.log(`[IndentFixer] ansible-lint stdout:`, stdout);
                     if (stderr) {
                         console.log(`[IndentFixer] ansible-lint stderr:`, stderr);
@@ -370,11 +385,26 @@ export class IndentFixer {
         console.log(`[IndentFixer] Creating temp file: ${tempFilePath}`);
         fs.writeFileSync(tempFilePath, fullText);
 
+        // Настраиваем PATH для поиска pre-commit
+        const extraPaths = [
+            `${process.env.HOME}/.local/bin`,
+            `${rootPath}/venv/bin`,
+            `${rootPath}/../venv/bin`,
+            '/usr/local/bin',
+            '/usr/bin'
+        ].filter(p => p).join(path.delimiter);
+        
+        const env = {
+            ...process.env,
+            PATH: `${extraPaths}${path.delimiter}${process.env.PATH}`
+        };
+
         try {
             // Run pre-commit
             console.log(`[IndentFixer] Running: pre-commit run --files "${tempFileName}" in ${rootPath}`);
+            console.log(`[IndentFixer] PATH: ${env.PATH}`);
             await new Promise<void>((resolve, reject) => {
-                cp.exec(`pre-commit run --files "${tempFileName}"`, { cwd: rootPath, timeout: 30000 }, (error, stdout, stderr) => {
+                cp.exec(`pre-commit run --files "${tempFileName}"`, { cwd: rootPath, timeout: 30000, env }, (error, stdout, stderr) => {
                     console.log(`[IndentFixer] pre-commit stdout:`, stdout);
                     if (stderr) {
                         console.log(`[IndentFixer] pre-commit stderr:`, stderr);
