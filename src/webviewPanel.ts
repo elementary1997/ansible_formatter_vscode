@@ -44,10 +44,10 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                     this._gotoError(data.file, data.line);
                     break;
                 case 'fixFile':
-                    this._fixFile(data.file);
+                    vscode.commands.executeCommand('ansible-lint.fixWithTool', data.file);
                     break;
                 case 'fixAll':
-                    this._fixAll();
+                    vscode.commands.executeCommand('ansible-lint.fixAll');
                     break;
                 case 'refresh':
                     vscode.commands.executeCommand('ansible-lint.run');
@@ -129,29 +129,6 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         }
     }
 
-    /**
-     * Исправить файл
-     */
-    private async _fixFile(file: string): Promise<void> {
-        try {
-            const uri = vscode.Uri.file(file);
-            const document = await vscode.workspace.openTextDocument(uri);
-            await vscode.commands.executeCommand('ansible-lint.fixCurrent', document);
-        } catch (error: any) {
-            vscode.window.showErrorMessage(`Failed to fix file: ${error.message}`);
-        }
-    }
-
-    /**
-     * Исправить все файлы
-     */
-    private async _fixAll(): Promise<void> {
-        const uniqueFiles = new Set(this._errors.map(e => e.file));
-
-        for (const file of uniqueFiles) {
-            await this._fixFile(file);
-        }
-    }
 
     /**
      * Получить HTML для webview

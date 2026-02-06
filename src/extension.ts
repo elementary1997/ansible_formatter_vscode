@@ -88,6 +88,10 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     context.subscriptions.push(
+        vscode.commands.registerCommand('ansible-lint.fixAll', fixAllFiles)
+    );
+
+    context.subscriptions.push(
         vscode.commands.registerCommand('ansible-lint.fixWithTool', fixWithTool)
     );
 
@@ -438,14 +442,73 @@ async function fixCurrentFile(): Promise<void> {
 }
 
 /**
+ * Исправить все файлы в workspace
+ */
+async function fixAllFiles(): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        vscode.window.showErrorMessage('No workspace folder found');
+        return;
+    }
+
+    const workspaceRoot = workspaceFolders[0].uri.fsPath;
+
+    try {
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Fixing all files...',
+            cancellable: false
+        }, async (progress) => {
+            // Шаг 1: Запускаем pre-commit (автоматические исправления)
+            progress.report({ increment: 0, message: 'Running pre-commit auto-fixes...' });
+            try {
+                await Executor.runPreCommitAll(workspaceRoot);
+                console.log('[Extension] pre-commit auto-fixes applied');
+            } catch (error: any) {
+                console.log('[Extension] pre-commit not available or failed:', error.message);
+            }
+
+            progress.report({ increment: 40, message: 'Running ansible-lint --fix...' });
+
+            // Шаг 2: Запускаем ansible-lint --fix на всех файлах
+            try {
+                await Executor.runAnsibleLintFixAll(workspaceRoot);
+            } catch (error: any) {
+                console.log('[Extension] ansible-lint --fix completed with warnings:', error.message);
+            }
+
+            progress.report({ increment: 80, message: 'Refreshing...' });
+
+            // Шаг 3: Перезапускаем проверку
+            await runAnsibleLintOnAllFiles();
+
+            progress.report({ increment: 100 });
+        });
+
+        vscode.window.showInformationMessage('✓ All files fixed!');
+
+    } catch (error: any) {
+        vscode.window.showErrorMessage(`Failed to fix files: ${error.message}`);
+    }
+}
+
+/**
  * Исправить с помощью ansible-lint --fix
  */
-async function fixWithTool(uriString?: string): Promise<void> {
+async function fixWithTool(filePathOrUri?: string): Promise<void> {
     let document: vscode.TextDocument;
 
-    if (uriString) {
-        // URI передан из Code Action
-        const uri = vscode.Uri.parse(uriString);
+    if (filePathOrUri) {
+        // Может быть либо URI строка, либо file path
+        let uri: vscode.Uri;
+        try {
+            // Пробуем как URI
+            uri = vscode.Uri.parse(filePathOrUri);
+        } catch {
+            // Если не получилось, используем как file path
+            uri = vscode.Uri.file(filePathOrUri);
+        }
         document = await vscode.workspace.openTextDocument(uri);
     } else {
         // Вызвано из Command Palette

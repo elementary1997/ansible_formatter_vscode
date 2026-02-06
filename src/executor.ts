@@ -9,16 +9,16 @@ import * as vscode from 'vscode';
 import { LintResult } from './models/lintError';
 
 export class Executor {
-    
+
     /**
      * Поиск исполняемого файла в стандартных локациях
      */
     private static findExecutable(commandName: string, workspaceRoot?: string): string {
         const isWindows = process.platform === 'win32';
         const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-        
+
         const searchPaths: string[] = [];
-        
+
         // 1. venv в workspace
         if (workspaceRoot) {
             if (isWindows) {
@@ -30,24 +30,24 @@ export class Executor {
                 searchPaths.push(path.join(workspaceRoot, '.venv', 'bin', commandName));
             }
         }
-        
+
         // 2. ~/.local/bin (pip install --user)
         if (homeDir && !isWindows) {
             searchPaths.push(path.join(homeDir, '.local', 'bin', commandName));
         }
-        
+
         // 3. Стандартные системные пути
         if (!isWindows) {
             searchPaths.push(`/usr/local/bin/${commandName}`);
             searchPaths.push(`/usr/bin/${commandName}`);
             searchPaths.push(`/bin/${commandName}`);
         }
-        
+
         // 4. pipx
         if (homeDir && !isWindows) {
             searchPaths.push(path.join(homeDir, '.local', 'pipx', 'venvs', commandName, 'bin', commandName));
         }
-        
+
         // Ищем первый существующий файл
         for (const fullPath of searchPaths) {
             if (fs.existsSync(fullPath)) {
@@ -60,54 +60,54 @@ export class Executor {
                 }
             }
         }
-        
+
         // Fallback: возвращаем имя команды (может быть в PATH)
         console.log(`[Executor] ${commandName} not found in standard locations, using command name`);
         return commandName;
     }
-    
+
     /**
      * Получить путь к ansible-lint из конфигурации или автоопределение
      */
     public static getAnsibleLintPath(workspaceRoot?: string): string {
         const config = vscode.workspace.getConfiguration('ansible-lint');
         const customPath = config.get<string>('executablePath');
-        
+
         if (customPath && customPath.trim() !== '') {
             return customPath;
         }
-        
+
         return this.findExecutable('ansible-lint', workspaceRoot);
     }
-    
+
     /**
      * Получить путь к pre-commit из конфигурации или автоопределение
      */
     public static getPreCommitPath(workspaceRoot?: string): string {
         const config = vscode.workspace.getConfiguration('ansible-lint');
         const customPath = config.get<string>('preCommitPath');
-        
+
         if (customPath && customPath.trim() !== '') {
             return customPath;
         }
-        
+
         return this.findExecutable('pre-commit', workspaceRoot);
     }
-    
+
     /**
      * Получить путь к yamllint из конфигурации или автоопределение
      */
     public static getYamllintPath(workspaceRoot?: string): string {
         const config = vscode.workspace.getConfiguration('ansible-lint');
         const customPath = config.get<string>('yamllintPath');
-        
+
         if (customPath && customPath.trim() !== '') {
             return customPath;
         }
-        
+
         return this.findExecutable('yamllint', workspaceRoot);
     }
-    
+
     /**
      * Запуск команды через child_process
      */
@@ -125,7 +125,7 @@ export class Executor {
                 '/usr/local/bin',
                 '/usr/bin'
             ].filter(p => p);
-            
+
             const pathSeparator = isWindows ? ';' : ':';
             const env = {
                 ...process.env,
@@ -133,17 +133,17 @@ export class Executor {
                 NO_COLOR: '1',  // Отключаем цвета для всех команд
                 TERM: 'dumb'    // Отключаем ANSI escape коды
             };
-            
+
             const startTime = Date.now();
-            
+
             cp.exec(command, { cwd, timeout, env }, (error, stdout, stderr) => {
                 const exitCode = error?.code || 0;
                 const executionTime = Date.now() - startTime;
-                
+
                 console.log(`[Executor] Command: ${command}`);
                 console.log(`[Executor] Exit code: ${exitCode}`);
                 console.log(`[Executor] Execution time: ${executionTime}ms`);
-                
+
                 // Exit codes 0, 1, 2 для линтеров - это нормально
                 // 0 - нет ошибок
                 // 1, 2 - найдены ошибки (это то, что нам нужно)
@@ -155,7 +155,7 @@ export class Executor {
             });
         });
     }
-    
+
     /**
      * Запуск ansible-lint на файле
      */
@@ -168,7 +168,7 @@ export class Executor {
         const ansibleLintPath = this.getAnsibleLintPath(workspaceRoot);
         const relativePath = path.relative(workspaceRoot, filePath);
         const command = `"${ansibleLintPath}" --nocolor -f ${format} "${relativePath}"`;
-        
+
         try {
             const result = await this.runCommand(command, workspaceRoot);
             return {
@@ -182,7 +182,7 @@ export class Executor {
             throw new Error(`ansible-lint failed: ${error.message}`);
         }
     }
-    
+
     /**
      * Запуск ansible-lint на всех файлах проекта
      */
@@ -193,7 +193,7 @@ export class Executor {
         const startTime = Date.now();
         const ansibleLintPath = this.getAnsibleLintPath(workspaceRoot);
         const command = `"${ansibleLintPath}" --nocolor -f ${format}`;
-        
+
         try {
             const result = await this.runCommand(command, workspaceRoot);
             return {
@@ -207,7 +207,7 @@ export class Executor {
             throw new Error(`ansible-lint failed: ${error.message}`);
         }
     }
-    
+
     /**
      * Запуск pre-commit на файле
      */
@@ -219,7 +219,7 @@ export class Executor {
         const preCommitPath = this.getPreCommitPath(workspaceRoot);
         const relativePath = path.relative(workspaceRoot, filePath);
         const command = `"${preCommitPath}" run --files "${relativePath}"`;
-        
+
         try {
             const result = await this.runCommand(command, workspaceRoot);
             return {
@@ -233,7 +233,7 @@ export class Executor {
             throw new Error(`pre-commit failed: ${error.message}`);
         }
     }
-    
+
     /**
      * Запуск pre-commit на всех файлах
      */
@@ -243,7 +243,7 @@ export class Executor {
         const startTime = Date.now();
         const preCommitPath = this.getPreCommitPath(workspaceRoot);
         const command = `"${preCommitPath}" run --all-files`;
-        
+
         try {
             const result = await this.runCommand(command, workspaceRoot);
             return {
@@ -257,7 +257,7 @@ export class Executor {
             throw new Error(`pre-commit failed: ${error.message}`);
         }
     }
-    
+
     /**
      * Запуск yamllint на файле
      */
@@ -269,7 +269,7 @@ export class Executor {
         const yamllintPath = this.getYamllintPath(workspaceRoot);
         const relativePath = path.relative(workspaceRoot, filePath);
         const command = `"${yamllintPath}" -f parsable "${relativePath}"`;
-        
+
         try {
             const result = await this.runCommand(command, workspaceRoot);
             return {
@@ -283,7 +283,7 @@ export class Executor {
             throw new Error(`yamllint failed: ${error.message}`);
         }
     }
-    
+
     /**
      * Запуск yamllint на всех yaml файлах
      */
@@ -293,7 +293,7 @@ export class Executor {
         const startTime = Date.now();
         const yamllintPath = this.getYamllintPath(workspaceRoot);
         const command = `"${yamllintPath}" -f parsable .`;
-        
+
         try {
             const result = await this.runCommand(command, workspaceRoot);
             return {
@@ -307,7 +307,7 @@ export class Executor {
             throw new Error(`yamllint failed: ${error.message}`);
         }
     }
-    
+
     /**
      * Запуск ansible-lint --fix на файле
      */
@@ -318,13 +318,34 @@ export class Executor {
         const ansibleLintPath = this.getAnsibleLintPath(workspaceRoot);
         const relativePath = path.relative(workspaceRoot, filePath);
         const command = `"${ansibleLintPath}" --nocolor --fix "${relativePath}"`;
-        
+
         try {
             await this.runCommand(command, workspaceRoot);
             console.log(`[Executor] ansible-lint --fix completed for ${relativePath}`);
         } catch (error: any) {
             // ansible-lint --fix может вернуть код 2, если остались неисправимые ошибки
             // Это нормально - файл все равно был исправлен частично
+            if (!error.message.includes('code 2')) {
+                throw error;
+            }
+        }
+    }
+
+    /**
+     * Запуск ansible-lint --fix на всех файлах workspace
+     */
+    public static async runAnsibleLintFixAll(
+        workspaceRoot: string
+    ): Promise<void> {
+        const ansibleLintPath = this.getAnsibleLintPath(workspaceRoot);
+        const command = `"${ansibleLintPath}" --nocolor --fix`;
+
+        try {
+            await this.runCommand(command, workspaceRoot);
+            console.log(`[Executor] ansible-lint --fix completed for all files`);
+        } catch (error: any) {
+            // ansible-lint --fix может вернуть код 2, если остались неисправимые ошибки
+            // Это нормально - файлы все равно были исправлены частично
             if (!error.message.includes('code 2')) {
                 throw error;
             }
