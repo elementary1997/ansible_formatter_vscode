@@ -168,11 +168,16 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ansible Lint Results</title>
     <style>
+        :root {
+            --ui-scale: ${scaleFactor};
+        }
+
         body {
             padding: 10px;
             font-family: var(--vscode-font-family);
-            font-size: calc(var(--vscode-font-size) * ${scaleFactor});
+            font-size: var(--vscode-font-size);
             color: var(--vscode-foreground);
+            zoom: var(--ui-scale);
         }
 
         .header {
