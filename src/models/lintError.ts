@@ -30,6 +30,9 @@ export interface LintError {
     
     /** URL документации правила */
     documentationUrl?: string;
+    
+    /** Группа проверки (для разделителей) */
+    checkGroup?: 'pre-commit' | 'ansible-lint';
 }
 
 /**

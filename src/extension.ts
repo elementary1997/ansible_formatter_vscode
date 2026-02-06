@@ -147,16 +147,9 @@ async function runAnsibleLintOnCurrentFile(): Promise<void> {
                 const preCommitErrors = Parser.parse(preCommitResult, workspaceRoot, 'pre-commit');
                 
                 if (preCommitErrors.length > 0) {
-                    // Добавляем разделитель
-                    allErrors.push({
-                        file: filePath,
-                        line: 1,
-                        column: 1,
-                        rule: 'separator',
-                        message: '━━━ PRE-COMMIT CHECKS ━━━',
-                        severity: 'info',
-                        source: 'pre-commit',
-                        fixable: false
+                    // Добавляем метаданные о группе
+                    preCommitErrors.forEach(error => {
+                        error.checkGroup = 'pre-commit';
                     });
                     allErrors.push(...preCommitErrors);
                 }
@@ -171,19 +164,10 @@ async function runAnsibleLintOnCurrentFile(): Promise<void> {
             const ansibleErrors = Parser.parse(ansibleResult, workspaceRoot, 'pep8');
             
             if (ansibleErrors.length > 0) {
-                // Добавляем разделитель если есть pre-commit ошибки
-                if (allErrors.length > 0) {
-                    allErrors.push({
-                        file: filePath,
-                        line: 1,
-                        column: 1,
-                        rule: 'separator',
-                        message: '━━━ ANSIBLE-LINT CHECKS ━━━',
-                        severity: 'info',
-                        source: 'ansible-lint',
-                        fixable: false
-                    });
-                }
+                // Добавляем метаданные о группе
+                ansibleErrors.forEach(error => {
+                    error.checkGroup = 'ansible-lint';
+                });
                 allErrors.push(...ansibleErrors);
             }
             

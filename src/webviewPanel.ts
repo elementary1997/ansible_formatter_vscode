@@ -48,9 +48,6 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                 case 'refresh':
                     vscode.commands.executeCommand('ansible-lint.run');
                     break;
-                case 'runPreCommit':
-                    vscode.commands.executeCommand('ansible-lint.runPreCommit');
-                    break;
                 case 'clear':
                     this.clear();
                     break;
@@ -99,7 +96,8 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             message: error.message,
             severity: error.severity,
             source: error.source,
-            fixable: error.fixable
+            fixable: error.fixable,
+            checkGroup: (error as any).checkGroup
         }));
     }
     
@@ -287,9 +285,8 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
     <div class="header">
         <div class="stats" id="stats">No errors</div>
         <div class="buttons">
-            <button onclick="runPreCommit()" title="Run pre-commit" style="background: var(--vscode-button-secondaryBackground);">Pre-commit</button>
+            <button onclick="refresh()" title="Run checks">Run</button>
             <button onclick="fixAll()" title="Fix all files">Fix All</button>
-            <button onclick="refresh()" title="Run linter again">Refresh</button>
             <button onclick="clear()" title="Clear results">Clear</button>
         </div>
     </div>
@@ -361,15 +358,20 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                         </div>
                 \`;
                 
-                for (const error of fileErrors) {
-                    // Разделитель отображаем отдельно
-                    if (error.rule === 'separator') {
-                        html += \`
-                            <div style="padding: 10px 12px; margin: 10px 0; font-weight: bold; color: var(--vscode-descriptionForeground); border-top: 2px solid var(--vscode-panel-border); border-bottom: 2px solid var(--vscode-panel-border);">
-                                \${escapeHtml(error.message)}
-                            </div>
-                        \`;
-                    } else {
+                // Группируем по checkGroup
+                const preCommitErrors = fileErrors.filter(e => e.checkGroup === 'pre-commit');
+                const ansibleErrors = fileErrors.filter(e => e.checkGroup === 'ansible-lint');
+                const otherErrors = fileErrors.filter(e => !e.checkGroup);
+                
+                // Pre-commit ошибки
+                if (preCommitErrors.length > 0) {
+                    html += \`
+                        <div style="padding: 8px 12px; margin: 8px 0; font-weight: bold; font-size: 0.85em; color: var(--vscode-descriptionForeground); border-top: 1px solid var(--vscode-panel-border); border-bottom: 1px solid var(--vscode-panel-border);">
+                            ━━━ PRE-COMMIT CHECKS ━━━
+                        </div>
+                    \`;
+                    
+                    for (const error of preCommitErrors) {
                         html += \`
                             <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
                                 <div class="error-header">
@@ -380,6 +382,40 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                             </div>
                         \`;
                     }
+                }
+                
+                // Ansible-lint ошибки
+                if (ansibleErrors.length > 0) {
+                    html += \`
+                        <div style="padding: 8px 12px; margin: 8px 0; font-weight: bold; font-size: 0.85em; color: var(--vscode-descriptionForeground); border-top: 1px solid var(--vscode-panel-border); border-bottom: 1px solid var(--vscode-panel-border);">
+                            ━━━ ANSIBLE-LINT CHECKS ━━━
+                        </div>
+                    \`;
+                    
+                    for (const error of ansibleErrors) {
+                        html += \`
+                            <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
+                                <div class="error-header">
+                                    <span class="error-location">Line \${error.line}</span>
+                                    <span class="error-rule">[\${error.rule}]</span>
+                                </div>
+                                <div class="error-message">\${escapeHtml(error.message)}</div>
+                            </div>
+                        \`;
+                    }
+                }
+                
+                // Ошибки без группы
+                for (const error of otherErrors) {
+                    html += \`
+                        <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
+                            <div class="error-header">
+                                <span class="error-location">Line \${error.line}</span>
+                                <span class="error-rule">[\${error.rule}]</span>
+                            </div>
+                            <div class="error-message">\${escapeHtml(error.message)}</div>
+                        </div>
+                    \`;
                 }
                 
                 html += '</div>';
@@ -418,12 +454,6 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         function clear() {
             vscode.postMessage({
                 type: 'clear'
-            });
-        }
-        
-        function runPreCommit() {
-            vscode.postMessage({
-                type: 'runPreCommit'
             });
         }
         
