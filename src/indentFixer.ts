@@ -169,19 +169,40 @@ export class IndentFixer {
         const document = activeEditor.document;
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
 
-        // 1. Check for pre-commit config
+        // 1. Check for pre-commit config (опциональная функция)
         let hasPreCommit = false;
+        let preCommitAvailable = false;
+        
         if (workspaceFolder) {
             const configPath = path.join(workspaceFolder.uri.fsPath, '.pre-commit-config.yaml');
             if (fs.existsSync(configPath)) {
                 hasPreCommit = true;
                 console.log(`[IndentFixer] Found pre-commit config at: ${configPath}`);
+                
+                // Проверяем что pre-commit установлен
+                try {
+                    await new Promise<void>((resolve, reject) => {
+                        cp.exec('pre-commit --version', (error) => {
+                            if (error) {
+                                reject(error);
+                            } else {
+                                resolve();
+                            }
+                        });
+                    });
+                    preCommitAvailable = true;
+                    console.log('[IndentFixer] pre-commit is available');
+                } catch {
+                    console.log('[IndentFixer] pre-commit not found, will use internal fixer');
+                }
             } else {
-                console.log(`[IndentFixer] No pre-commit config found at: ${configPath}`);
+                console.log(`[IndentFixer] No pre-commit config found, using internal fixer`);
             }
         } else {
             console.log('[IndentFixer] No workspace folder found');
         }
+        
+        hasPreCommit = hasPreCommit && preCommitAvailable;
 
         if (hasPreCommit && workspaceFolder) {
             try {
@@ -198,8 +219,8 @@ export class IndentFixer {
                 console.log('[IndentFixer] Pre-commit made no changes, falling back to internal fixer.');
             } catch (err) {
                 console.error('[IndentFixer] Pre-commit execution failed, falling back to internal fixer:', err);
-                vscode.window.showWarningMessage(`Pre-commit failed: ${err}. Using internal fixer.`);
-                // Fallback to internal
+                // Не показываем уведомление - pre-commit опциональный
+                // Просто используем internal fixer
             }
         }
 

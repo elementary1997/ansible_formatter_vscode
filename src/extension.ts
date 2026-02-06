@@ -204,6 +204,7 @@ async function checkAndInstallDependencies(context: vscode.ExtensionContext) {
         { name: 'yamllint', cmd: 'yamllint --version' },
         { name: 'ansible-lint', cmd: 'ansible-lint --version' },
         { name: 'ansible', cmd: 'ansible --version' }
+        // pre-commit опциональный, устанавливается только если нужен
     ];
 
     const missing: string[] = [];
