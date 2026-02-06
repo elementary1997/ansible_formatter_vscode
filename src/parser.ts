@@ -74,7 +74,7 @@ export class Parser {
                     severity: severity,
                     source: 'ansible-lint',
                     fixable: this.isFixable(rule),
-                    documentationUrl: this.getDocumentationUrl(rule)
+                    documentationUrl: this.getDocumentationUrl(rule, 'ansible-lint')
                 });
             }
         } catch (error: any) {
@@ -132,7 +132,7 @@ export class Parser {
                     severity: 'warning',
                     source: 'ansible-lint',
                     fixable: this.isFixable(rule),
-                    documentationUrl: this.getDocumentationUrl(rule)
+                    documentationUrl: this.getDocumentationUrl(rule, 'ansible-lint')
                 });
                 continue;
             }
@@ -163,7 +163,7 @@ export class Parser {
                     severity: 'warning',
                     source: 'ansible-lint',
                     fixable: this.isFixable(lastRule),
-                    documentationUrl: this.getDocumentationUrl(lastRule)
+                    documentationUrl: this.getDocumentationUrl(lastRule, 'ansible-lint')
                 });
 
                 lastRule = '';
@@ -243,7 +243,7 @@ export class Parser {
                     severity: 'info',
                     source: 'pre-commit',
                     fixable: true,
-                    documentationUrl: undefined
+                    documentationUrl: this.getDocumentationUrl(currentHookId, 'pre-commit')
                 });
 
                 console.log(`[Parser] Fixing: ${file}`);
@@ -275,7 +275,7 @@ export class Parser {
                     severity: 'error',
                     source: 'pre-commit',
                     fixable: false,
-                    documentationUrl: undefined
+                    documentationUrl: this.getDocumentationUrl(currentHookId, 'pre-commit')
                 });
 
                 console.log(`[Parser] Error in ${file}:${lineNum} - ${message}`);
@@ -299,7 +299,7 @@ export class Parser {
                     severity: 'warning',
                     source: 'pre-commit',
                     fixable: false,
-                    documentationUrl: undefined
+                    documentationUrl: this.getDocumentationUrl(currentHookId, 'pre-commit')
                 });
 
                 console.log(`[Parser] File message: ${file} - ${message}`);
@@ -364,7 +364,7 @@ export class Parser {
                     severity: severity.toLowerCase() === 'error' ? 'error' : 'warning',
                     source: 'yamllint',
                     fixable: false,
-                    documentationUrl: `https://yamllint.readthedocs.io/en/stable/rules.html#module-yamllint.rules.${rule.trim()}`
+                    documentationUrl: this.getDocumentationUrl(rule.trim(), 'yamllint')
                 });
             }
         }
@@ -397,13 +397,35 @@ export class Parser {
     /**
      * Получает URL документации для правила
      */
-    private static getDocumentationUrl(rule: string): string | undefined {
+    private static getDocumentationUrl(rule: string, source?: string): string | undefined {
         // Извлекаем имя правила из формата yaml[trailing-spaces]
         const ruleMatch = rule.match(/^([^[]+)\[?([^\]]*)\]?$/);
         const ruleName = ruleMatch ? ruleMatch[1] : rule;
+        const subRule = ruleMatch && ruleMatch[2] ? ruleMatch[2] : '';
 
-        // ansible-lint documentation
-        return `https://ansible-lint.readthedocs.io/rules/${ruleName}/`;
+        // Генерируем ссылки в зависимости от источника
+        if (source === 'yamllint') {
+            // yamllint documentation
+            if (subRule) {
+                return `https://yamllint.readthedocs.io/en/stable/rules.html#module-yamllint.rules.${subRule}`;
+            }
+            return `https://yamllint.readthedocs.io/en/stable/rules.html`;
+        } else if (source === 'pre-commit') {
+            // pre-commit hooks documentation
+            if (rule.includes('check-yaml')) {
+                return `https://github.com/pre-commit/pre-commit-hooks#check-yaml`;
+            } else if (rule.includes('trailing-whitespace')) {
+                return `https://github.com/pre-commit/pre-commit-hooks#trailing-whitespace`;
+            } else if (rule.includes('end-of-file')) {
+                return `https://github.com/pre-commit/pre-commit-hooks#end-of-file-fixer`;
+            } else if (rule.includes('mixed-line-ending')) {
+                return `https://github.com/pre-commit/pre-commit-hooks#mixed-line-ending`;
+            }
+            return `https://pre-commit.com/`;
+        } else {
+            // ansible-lint documentation
+            return `https://ansible-lint.readthedocs.io/rules/${ruleName}/`;
+        }
     }
 
     /**

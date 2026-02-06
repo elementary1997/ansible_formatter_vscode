@@ -171,7 +171,7 @@ export class Executor {
      */
     public static getPreCommitPath(workspaceRoot?: string): string {
         const config = vscode.workspace.getConfiguration('ansible-lint');
-        const customPath = config.get<string>('preCommitPath');
+        const customPath = config.get<string>('preCommitExecutable');
 
         if (customPath && customPath.trim() !== '') {
             return customPath;
@@ -185,7 +185,7 @@ export class Executor {
      */
     public static getYamllintPath(workspaceRoot?: string): string {
         const config = vscode.workspace.getConfiguration('ansible-lint');
-        const customPath = config.get<string>('yamllintPath');
+        const customPath = config.get<string>('yamllintExecutable');
 
         if (customPath && customPath.trim() !== '') {
             return customPath;

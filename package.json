@@ -81,10 +81,15 @@
           "default": "",
           "description": "Custom path to ansible-lint executable (leave empty for auto-detection)"
         },
-        "ansible-lint.preCommitPath": {
+        "ansible-lint.preCommitExecutable": {
           "type": "string",
           "default": "",
           "description": "Custom path to pre-commit executable (leave empty for auto-detection)"
+        },
+        "ansible-lint.yamllintExecutable": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to yamllint executable (leave empty for auto-detection)"
         },
         "ansible-lint.autoFixOnSave": {
           "type": "boolean",
