@@ -48,6 +48,9 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                 case 'refresh':
                     vscode.commands.executeCommand('ansible-lint.run');
                     break;
+                case 'runPreCommit':
+                    vscode.commands.executeCommand('ansible-lint.runPreCommit');
+                    break;
                 case 'clear':
                     this.clear();
                     break;
@@ -284,6 +287,7 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
     <div class="header">
         <div class="stats" id="stats">No errors</div>
         <div class="buttons">
+            <button onclick="runPreCommit()" title="Run pre-commit" style="background: var(--vscode-button-secondaryBackground);">Pre-commit</button>
             <button onclick="fixAll()" title="Fix all files">Fix All</button>
             <button onclick="refresh()" title="Run linter again">Refresh</button>
             <button onclick="clear()" title="Clear results">Clear</button>
@@ -359,7 +363,7 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                 
                 for (const error of fileErrors) {
                     html += \`
-                        <div class="error-item \${error.severity}" onclick="gotoError('\${file}', \${error.line})">
+                        <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
                             <div class="error-header">
                                 <span class="error-location">Line \${error.line}</span>
                                 <span class="error-rule">[\${error.rule}]</span>
@@ -405,6 +409,12 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         function clear() {
             vscode.postMessage({
                 type: 'clear'
+            });
+        }
+        
+        function runPreCommit() {
+            vscode.postMessage({
+                type: 'runPreCommit'
             });
         }
         

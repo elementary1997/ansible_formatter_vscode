@@ -151,7 +151,7 @@ export class Executor {
         const startTime = Date.now();
         const ansibleLintPath = this.getAnsibleLintPath(workspaceRoot);
         const relativePath = path.relative(workspaceRoot, filePath);
-        const command = `"${ansibleLintPath}" -f ${format} "${relativePath}"`;
+        const command = `"${ansibleLintPath}" --nocolor -f ${format} "${relativePath}"`;
         
         try {
             const result = await this.runCommand(command, workspaceRoot);
@@ -176,7 +176,7 @@ export class Executor {
     ): Promise<LintResult> {
         const startTime = Date.now();
         const ansibleLintPath = this.getAnsibleLintPath(workspaceRoot);
-        const command = `"${ansibleLintPath}" -f ${format}`;
+        const command = `"${ansibleLintPath}" --nocolor -f ${format}`;
         
         try {
             const result = await this.runCommand(command, workspaceRoot);
@@ -251,7 +251,7 @@ export class Executor {
     ): Promise<void> {
         const ansibleLintPath = this.getAnsibleLintPath(workspaceRoot);
         const relativePath = path.relative(workspaceRoot, filePath);
-        const command = `"${ansibleLintPath}" --fix "${relativePath}"`;
+        const command = `"${ansibleLintPath}" --nocolor --fix "${relativePath}"`;
         
         try {
             await this.runCommand(command, workspaceRoot);
