@@ -41,10 +41,8 @@ rules:
   comments-indentation:
     level: warning
 
-  # Document start - require document start marker
-  document-start:
-    present: false  # Ansible doesn't always require ---
-    level: warning
+  # Document start - allow with or without document start marker
+  document-start: disable  # Ansible files can have --- or not
 
   # Document end - don't require document end marker
   document-end: disable

@@ -182,11 +182,20 @@ async function runAnsibleLintOnCurrentFile(): Promise<void> {
             const ansibleErrors = Parser.parse(ansibleResult, workspaceRoot, 'pep8');
             
             if (ansibleErrors.length > 0) {
+                // Фильтруем load-failure ошибки если уже есть syntax ошибки от yamllint
+                const hasYamlSyntaxErrors = allErrors.some(e => 
+                    e.source === 'yamllint' && e.rule === 'syntax'
+                );
+                
+                const filteredAnsibleErrors = hasYamlSyntaxErrors
+                    ? ansibleErrors.filter(e => !e.rule.includes('load-failure'))
+                    : ansibleErrors;
+                
                 // Добавляем метаданные о группе
-                ansibleErrors.forEach(error => {
+                filteredAnsibleErrors.forEach(error => {
                     error.checkGroup = 'ansible-lint';
                 });
-                allErrors.push(...ansibleErrors);
+                allErrors.push(...filteredAnsibleErrors);
             }
             
             progress.report({ increment: 90 });
@@ -274,10 +283,19 @@ async function runAnsibleLintOnAllFiles(): Promise<void> {
             const ansibleErrors = Parser.parse(result, workspaceRoot, 'pep8');
             
             if (ansibleErrors.length > 0) {
-                ansibleErrors.forEach(error => {
+                // Фильтруем load-failure ошибки если уже есть syntax ошибки от yamllint
+                const hasYamlSyntaxErrors = allErrors.some(e => 
+                    e.source === 'yamllint' && e.rule === 'syntax'
+                );
+                
+                const filteredAnsibleErrors = hasYamlSyntaxErrors
+                    ? ansibleErrors.filter(e => !e.rule.includes('load-failure'))
+                    : ansibleErrors;
+                
+                filteredAnsibleErrors.forEach(error => {
                     error.checkGroup = 'ansible-lint';
                 });
-                allErrors.push(...ansibleErrors);
+                allErrors.push(...filteredAnsibleErrors);
             }
             
             progress.report({ increment: 90 });

@@ -194,105 +194,117 @@ export class Parser {
         console.log('[Parser] Pre-commit output:', stdout);
         
         const lines = stdout.split('\n');
-        let currentFile = '';
-        let currentHook = '';
+        let currentHookId = '';
+        let inHookOutput = false;
+        let hookErrorMessage: string[] = [];
         
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             
-            // Формат 0: Название хука и статус
-            // Check for merge conflicts........................................Passed
-            // yamllint.............................................................Failed
+            // Формат 1: Название хука и статус
+            // check yaml...............................................................Failed
             const hookMatch = line.match(/^(.+?)\.*\s*(Passed|Failed|Skipped)$/);
             if (hookMatch) {
-                currentHook = hookMatch[1].trim();
-                console.log('[Parser] Hook:', currentHook, 'status:', hookMatch[2]);
+                const hookName = hookMatch[1].trim();
+                const status = hookMatch[2];
+                
+                // Сбрасываем предыдущее состояние
+                inHookOutput = false;
+                currentHookId = '';
+                hookErrorMessage = [];
+                
+                if (status === 'Failed') {
+                    // Следующие строки могут содержать детали ошибки
+                    inHookOutput = true;
+                }
+                
+                console.log('[Parser] Hook:', hookName, 'status:', status);
                 continue;
             }
             
-            // Формат 1: Путь к файлу (начало блока ошибок)
-            // test_extension/main.yml
-            if (line && !line.startsWith(' ') && !line.startsWith('-') && (line.endsWith('.yml') || line.endsWith('.yaml') || line.includes('.yml:') || line.includes('.yaml:'))) {
-                const fileMatch = line.match(/^([^:]+\.(yml|yaml))/);
-                if (fileMatch) {
-                    currentFile = fileMatch[1].trim();
-                    console.log('[Parser] Found file:', currentFile);
-                    continue;
-                }
+            // Формат 2: hook id (идентификатор хука)
+            // - hook id: check-yaml
+            const hookIdMatch = line.match(/^-\s+hook\s+id:\s+(.+)$/);
+            if (hookIdMatch && inHookOutput) {
+                currentHookId = hookIdMatch[1].trim();
+                console.log('[Parser] Hook ID:', currentHookId);
+                continue;
             }
             
-            // Формат 2: Ошибки yamllint
-            // 19:5       error    Syntax error: expected <block end>, but found '?' (syntax)
-            const yamlLintMatch = line.match(/^\s+(\d+):(\d+)\s+(error|warning)\s+(.+?)(\s+\(([^)]+)\))?$/);
-            if (yamlLintMatch && currentFile) {
-                const [, lineNum, col, severity, message, , rule] = yamlLintMatch;
-                const filePath = path.isAbsolute(currentFile) ? currentFile : path.join(workspaceRoot, currentFile);
+            // Формат 3: exit code
+            // - exit code: 1
+            const exitCodeMatch = line.match(/^-\s+exit\s+code:\s+(\d+)$/);
+            if (exitCodeMatch) {
+                continue; // Просто пропускаем
+            }
+            
+            // Формат 4: Пустая строка или разделитель
+            if (line.trim() === '' || line.trim() === '-') {
+                continue;
+            }
+            
+            // Формат 5: Файл и детали ошибки (для check-yaml и других)
+            // while parsing a block collection
+            //   in "test_extension/main.yml", line 12, column 5
+            // expected <block end>, but found '?'
+            //   in "test_extension/main.yml", line 19, column 5
+            
+            // Извлекаем информацию о файле и строке
+            const fileLocationMatch = line.match(/in\s+"(.+?)",\s+line\s+(\d+)(?:,\s+column\s+(\d+))?/);
+            if (fileLocationMatch && inHookOutput) {
+                const [, file, lineNum, col] = fileLocationMatch;
+                const filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
                 
-                console.log('[Parser] yamllint error:', {lineNum, col, severity, message, rule});
+                // Собираем сообщение из предыдущих строк
+                const message = hookErrorMessage.length > 0 
+                    ? hookErrorMessage.join(' ').trim() 
+                    : 'Syntax error';
+                
+                console.log('[Parser] Pre-commit error:', {file, lineNum, col, message, hookId: currentHookId});
                 
                 errors.push({
                     file: filePath,
                     line: parseInt(lineNum, 10),
-                    column: parseInt(col, 10),
-                    rule: rule || 'yamllint',
-                    message: message.trim(),
-                    severity: severity === 'error' ? 'error' : 'warning',
+                    column: parseInt(col, 10) || 1,
+                    rule: currentHookId || 'pre-commit-hook',
+                    message: message,
+                    severity: 'error',
                     source: 'pre-commit',
                     fixable: false,
                     documentationUrl: undefined
                 });
+                
+                // Сбрасываем накопленное сообщение после создания ошибки
+                hookErrorMessage = [];
                 continue;
             }
             
-            // Формат 3: Стандартный формат ansible-lint в pre-commit
-            // main.yml:12:1: [yaml[trailing-spaces]] Trailing spaces
-            const ansibleMatch = line.match(/^(.+?):(\d+):(\d+):\s*\[?([^\]]+)\]?\s*(.+)$/);
-            if (ansibleMatch) {
-                const [, file, lineNum, col, rule, message] = ansibleMatch;
+            // Формат 6: Сообщения об ошибках (накапливаем)
+            // test_extension/main.yml: fixed mixed line endings
+            const fileMessageMatch = line.match(/^(.+?\.(yml|yaml)):\s*(.+)$/);
+            if (fileMessageMatch && inHookOutput) {
+                const [, file, , message] = fileMessageMatch;
                 const filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
-                
-                console.log('[Parser] ansible-lint error:', {file, lineNum, col, rule, message});
-                
-                errors.push({
-                    file: filePath,
-                    line: parseInt(lineNum, 10),
-                    column: parseInt(col, 10),
-                    rule: rule.trim(),
-                    message: message.trim(),
-                    severity: 'warning',
-                    source: 'pre-commit',
-                    fixable: this.isFixable(rule),
-                    documentationUrl: this.getDocumentationUrl(rule)
-                });
-                continue;
-            }
-            
-            // Формат 4: Ошибки trailing-whitespace и других хуков
-            // Файл с trailing-whitespace (но без указания строки)
-            if (line.startsWith('-') || (currentFile && line.trim() === '')) {
-                continue;
-            }
-            
-            // Формат 5: Загрузка failed в формате ansible-lint
-            // load-failure: Failed to load or parse file
-            const loadMatch = line.match(/^([a-z-]+):\s*(.+)$/i);
-            if (loadMatch && currentFile && currentHook.toLowerCase().includes('ansible')) {
-                const [, rule, message] = loadMatch;
-                const filePath = path.isAbsolute(currentFile) ? currentFile : path.join(workspaceRoot, currentFile);
-                
-                console.log('[Parser] load error:', {rule, message});
                 
                 errors.push({
                     file: filePath,
                     line: 1,
                     column: 1,
-                    rule: rule.trim(),
+                    rule: currentHookId || 'file-issue',
                     message: message.trim(),
-                    severity: 'error',
+                    severity: 'warning',
                     source: 'pre-commit',
-                    fixable: false,
-                    documentationUrl: this.getDocumentationUrl(rule)
+                    fixable: currentHookId === 'mixed-line-ending' || currentHookId === 'end-of-file-fixer',
+                    documentationUrl: undefined
                 });
+                
+                console.log('[Parser] File message:', {file, message});
+                continue;
+            }
+            
+            // Накапливаем строки ошибок
+            if (inHookOutput && line.trim() !== '') {
+                hookErrorMessage.push(line.trim());
             }
         }
         
