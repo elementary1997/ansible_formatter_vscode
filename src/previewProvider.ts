@@ -50,21 +50,8 @@ export class IndentPreviewProvider implements vscode.WebviewViewProvider {
             }
         });
 
-        // Auto-run when panel becomes visible
-        webviewView.onDidChangeVisibility(() => {
-            if (webviewView.visible) {
-                const editor = vscode.window.activeTextEditor;
-                if (editor && (editor.document.languageId === 'yaml' || editor.document.languageId === 'ansible')) {
-                    this.update(editor);
-                }
-            }
-        });
-
-        // Auto-run immediately if there's an active YAML/Ansible editor
-        const editor = vscode.window.activeTextEditor;
-        if (editor && (editor.document.languageId === 'yaml' || editor.document.languageId === 'ansible')) {
-            this.update(editor);
-        }
+        // DO NOT auto-run - only manual refresh via button
+        // User explicitly requested: check ONLY when refresh button is clicked
     }
 
     private updateTimeout: NodeJS.Timeout | undefined;

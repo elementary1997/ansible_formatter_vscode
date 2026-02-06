@@ -267,9 +267,11 @@ export class IndentFixer {
         outputChannel.appendLine('');
         outputChannel.appendLine('[2] Trying ansible-lint --fix...');
         try {
-            const ansibleLintResult = await this.runAnsibleLintFix(text, document.fileName, rootPath);
+            // ВАЖНО: передаем полный документ, не только выделение!
+            const fullDocumentText = activeEditor.document.getText();
+            const ansibleLintResult = await this.runAnsibleLintFix(fullDocumentText, document.fileName, rootPath);
             
-            if (ansibleLintResult !== text) {
+            if (ansibleLintResult !== fullDocumentText) {
                 outputChannel.appendLine('    ✅ ansible-lint --fix УСПЕШНО исправил файл!');
                 console.log('[IndentFixer] ✅ ansible-lint fixed the file');
                 outputChannel.show();
@@ -405,34 +407,45 @@ export class IndentFixer {
             // Run pre-commit
             console.log(`[IndentFixer] Running: pre-commit run --files "${tempFileName}" in ${rootPath}`);
             console.log(`[IndentFixer] PATH: ${env.PATH}`);
-            await new Promise<void>((resolve, reject) => {
+            const result = await new Promise<{code: number, stdout: string, stderr: string}>((resolve, reject) => {
                 cp.exec(`pre-commit run --files "${tempFileName}"`, { cwd: rootPath, timeout: 30000, env }, (error, stdout, stderr) => {
+                    const exitCode = error ? error.code || 0 : 0;
                     console.log(`[IndentFixer] pre-commit stdout:`, stdout);
-                    if (stderr) {
-                        console.log(`[IndentFixer] pre-commit stderr:`, stderr);
-                    }
+                    console.log(`[IndentFixer] pre-commit stderr:`, stderr);
+                    console.log(`[IndentFixer] pre-commit exit code:`, exitCode);
                     
                     // pre-commit returns exit codes:
-                    // 0 - success, no changes
-                    // 1 - files were modified
+                    // 0 - success, no changes needed
+                    // 1 - files were modified (SUCCESS!)
                     // 3 - config error or hook failed
-                    // Other codes - system errors
+                    // 127 - command not found
 
-                    if (error) {
-                        console.log(`[IndentFixer] pre-commit exit code:`, error.code);
-                        if (error.code === 1) {
-                            // Files were modified - this is OK
-                            resolve();
-                            return;
-                        }
-                        // Real error preventing execution
-                        const errorMsg = stderr || stdout || error.message;
-                        reject(new Error(`Pre-commit failed (код ${error.code}): ${errorMsg}`));
+                    if (exitCode === 127) {
+                        reject(new Error(`Pre-commit не найден: ${stderr || stdout || error?.message}`));
                         return;
                     }
-                    resolve();
+                    
+                    if (exitCode > 1 && exitCode !== 1) {
+                        reject(new Error(`Pre-commit failed (код ${exitCode}): ${stderr || stdout || error?.message}`));
+                        return;
+                    }
+                    
+                    // Exit code 0 or 1 - both OK
+                    resolve({code: exitCode, stdout, stderr});
                 });
             });
+            
+            console.log(`[IndentFixer] Pre-commit completed with code ${result.code}`);
+            
+            // Add to output channel
+            const outputChannel = vscode.window.createOutputChannel('YAML Auto-Fix Debug');
+            outputChannel.appendLine(`Pre-commit exit code: ${result.code}`);
+            outputChannel.appendLine(`Pre-commit output:`);
+            outputChannel.appendLine(result.stdout);
+            if (result.stderr) {
+                outputChannel.appendLine(`Pre-commit stderr:`);
+                outputChannel.appendLine(result.stderr);
+            }
 
             if (!fs.existsSync(tempFilePath)) {
                 throw new Error('Temp file disappeared');
@@ -440,6 +453,15 @@ export class IndentFixer {
 
             // Read back the file
             const fixedFullText = fs.readFileSync(tempFilePath, 'utf-8');
+            const originalFullText = activeEditor.document.getText();
+            
+            console.log(`[IndentFixer] Original file size: ${originalFullText.length} bytes`);
+            console.log(`[IndentFixer] Fixed file size: ${fixedFullText.length} bytes`);
+            console.log(`[IndentFixer] Files are ${fixedFullText === originalFullText ? 'IDENTICAL' : 'DIFFERENT'}`);
+            
+            outputChannel.appendLine(`Original file size: ${originalFullText.length} bytes`);
+            outputChannel.appendLine(`Fixed file size: ${fixedFullText.length} bytes`);
+            outputChannel.appendLine(`Files changed: ${fixedFullText === originalFullText ? 'NO' : 'YES'}`);
 
             // Check if there's a selection
             const hasSelection = !activeEditor.selection.isEmpty;
