@@ -11,6 +11,92 @@ import { LintResult } from './models/lintError';
 export class Executor {
 
     /**
+     * Проверить наличие конфигурационного файла в workspace
+     */
+    private static hasConfig(workspaceRoot: string, configName: string): boolean {
+        const possibleNames = [configName, `.${configName}`, `${configName}.yaml`, `${configName}.yml`];
+        for (const name of possibleNames) {
+            const configPath = path.join(workspaceRoot, name);
+            if (fs.existsSync(configPath)) {
+                console.log(`[Executor] Found config: ${configPath}`);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Получить путь к дефолтному конфигу из расширения
+     */
+    private static getDefaultConfigPath(configName: string): string | null {
+        const extensionPath = vscode.extensions.getExtension('elementary1997.ansible-lint-helper')?.extensionPath;
+        if (!extensionPath) {
+            console.warn('[Executor] Extension path not found');
+            return null;
+        }
+        const defaultConfigPath = path.join(extensionPath, 'defaults', configName);
+        if (fs.existsSync(defaultConfigPath)) {
+            console.log(`[Executor] Using default config: ${defaultConfigPath}`);
+            return defaultConfigPath;
+        }
+        console.warn(`[Executor] Default config not found: ${defaultConfigPath}`);
+        return null;
+    }
+
+    /**
+     * Обеспечить наличие конфига (использовать из workspace или дефолтный)
+     * Для yamllint возвращает путь к конфигу (можно передать через -c)
+     * Для ansible-lint и pre-commit копирует дефолтный конфиг в workspace если нужно
+     */
+    private static ensureConfig(workspaceRoot: string, configName: string): string | null {
+        // 1. Проверяем наличие конфига в workspace
+        if (this.hasConfig(workspaceRoot, configName)) {
+            console.log(`[Executor] Using workspace config: ${configName}`);
+            return null; // Линтер сам найдет конфиг в workspace
+        }
+
+        // 2. Используем дефолтный конфиг
+        const defaultPath = this.getDefaultConfigPath(configName);
+        if (defaultPath) {
+            console.log(`[Executor] No workspace config found, using default: ${configName}`);
+            return defaultPath;
+        }
+
+        console.warn(`[Executor] No config found for ${configName}, using tool defaults`);
+        return null;
+    }
+
+    /**
+     * Копировать дефолтный конфиг в workspace если его нет
+     */
+    private static async copyDefaultConfigIfNeeded(workspaceRoot: string, configName: string): Promise<void> {
+        // Проверяем наличие конфига в workspace
+        if (this.hasConfig(workspaceRoot, configName)) {
+            console.log(`[Executor] Config ${configName} already exists in workspace`);
+            return;
+        }
+
+        // Получаем путь к дефолтному конфигу
+        const defaultPath = this.getDefaultConfigPath(configName);
+        if (!defaultPath) {
+            console.warn(`[Executor] No default config found for ${configName}`);
+            return;
+        }
+
+        // Копируем дефолтный конфиг в workspace
+        const targetPath = path.join(workspaceRoot, configName.startsWith('.') ? configName : `.${configName}`);
+        try {
+            fs.copyFileSync(defaultPath, targetPath);
+            console.log(`[Executor] Copied default config to ${targetPath}`);
+            vscode.window.showInformationMessage(
+                `📋 Created default ${configName} config in workspace. You can customize it if needed.`
+            );
+        } catch (error: any) {
+            console.error(`[Executor] Failed to copy default config: ${error.message}`);
+        }
+    }
+
+    /**
      * Поиск исполняемого файла в стандартных локациях
      */
     private static findExecutable(commandName: string, workspaceRoot?: string): string {
@@ -165,6 +251,10 @@ export class Executor {
         format: 'json' | 'pep8' | 'codeclimate' = 'pep8'
     ): Promise<LintResult> {
         const startTime = Date.now();
+
+        // Обеспечить наличие .ansible-lint конфига
+        await this.copyDefaultConfigIfNeeded(workspaceRoot, '.ansible-lint');
+
         const ansibleLintPath = this.getAnsibleLintPath(workspaceRoot);
         const relativePath = path.relative(workspaceRoot, filePath);
         const command = `"${ansibleLintPath}" --nocolor -f ${format} "${relativePath}"`;
@@ -216,6 +306,10 @@ export class Executor {
         workspaceRoot: string
     ): Promise<LintResult> {
         const startTime = Date.now();
+
+        // Обеспечить наличие .pre-commit-config.yaml
+        await this.copyDefaultConfigIfNeeded(workspaceRoot, '.pre-commit-config.yaml');
+
         const preCommitPath = this.getPreCommitPath(workspaceRoot);
         const relativePath = path.relative(workspaceRoot, filePath);
         const command = `"${preCommitPath}" run --files "${relativePath}"`;
@@ -268,7 +362,12 @@ export class Executor {
         const startTime = Date.now();
         const yamllintPath = this.getYamllintPath(workspaceRoot);
         const relativePath = path.relative(workspaceRoot, filePath);
-        const command = `"${yamllintPath}" -f parsable "${relativePath}"`;
+
+        // Проверяем наличие конфига yamllint
+        const defaultConfigPath = this.ensureConfig(workspaceRoot, 'yamllint');
+        const configArg = defaultConfigPath ? `-c "${defaultConfigPath}"` : '';
+
+        const command = `"${yamllintPath}" ${configArg} -f parsable "${relativePath}"`;
 
         try {
             const result = await this.runCommand(command, workspaceRoot);
@@ -292,7 +391,12 @@ export class Executor {
     ): Promise<LintResult> {
         const startTime = Date.now();
         const yamllintPath = this.getYamllintPath(workspaceRoot);
-        const command = `"${yamllintPath}" -f parsable .`;
+
+        // Проверяем наличие конфига yamllint
+        const defaultConfigPath = this.ensureConfig(workspaceRoot, 'yamllint');
+        const configArg = defaultConfigPath ? `-c "${defaultConfigPath}"` : '';
+
+        const command = `"${yamllintPath}" ${configArg} -f parsable .`;
 
         try {
             const result = await this.runCommand(command, workspaceRoot);

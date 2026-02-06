@@ -3,9 +3,9 @@
   "displayName": "Ansible Lint Helper",
   "description": "Run yamllint, pre-commit and ansible-lint with inline errors and auto-fix support",
   "version": "1.0.0",
-  "publisher": "your-publisher-name",
+  "publisher": "elementary1997",
   "author": {
-    "name": "Your Name"
+    "name": "elementary1997"
   },
   "license": "MIT",
   "repository": {
