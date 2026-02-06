@@ -146,7 +146,7 @@ export class Executor {
     public static async runAnsibleLint(
         filePath: string,
         workspaceRoot: string,
-        format: 'json' | 'pep8' = 'json'
+        format: 'json' | 'pep8' | 'codeclimate' = 'pep8'
     ): Promise<LintResult> {
         const startTime = Date.now();
         const ansibleLintPath = this.getAnsibleLintPath(workspaceRoot);
@@ -172,7 +172,7 @@ export class Executor {
      */
     public static async runAnsibleLintAll(
         workspaceRoot: string,
-        format: 'json' | 'pep8' = 'json'
+        format: 'json' | 'pep8' | 'codeclimate' = 'pep8'
     ): Promise<LintResult> {
         const startTime = Date.now();
         const ansibleLintPath = this.getAnsibleLintPath(workspaceRoot);

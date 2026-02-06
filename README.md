@@ -23,9 +23,14 @@
 # Установка ansible и ansible-lint
 pip install ansible ansible-lint
 
-# Опционально: pre-commit
-pip install pre-commit
+# Рекомендуется: pre-commit версии 5.0.0
+pip install pre-commit==5.0.0
+
+# Настройка pre-commit в проекте (опционально)
+pre-commit install
 ```
+
+**📘 Подробная инструкция по установке:** см. [PRECOMMIT_SETUP.md](PRECOMMIT_SETUP.md)
 
 ## 🚀 Быстрый старт
 

@@ -141,12 +141,12 @@ async function runAnsibleLintOnCurrentFile(): Promise<void> {
             progress.report({ increment: 0 });
             
             // Запускаем ansible-lint
-            const result = await Executor.runAnsibleLint(filePath, workspaceRoot, 'json');
+            const result = await Executor.runAnsibleLint(filePath, workspaceRoot, 'pep8');
             
             progress.report({ increment: 50 });
             
             // Парсим результаты
-            const errors = Parser.parse(result, workspaceRoot, 'json');
+            const errors = Parser.parse(result, workspaceRoot, 'pep8');
             
             progress.report({ increment: 75 });
             
@@ -194,12 +194,12 @@ async function runAnsibleLintOnAllFiles(): Promise<void> {
             progress.report({ increment: 0 });
             
             // Запускаем ansible-lint на всех файлах
-            const result = await Executor.runAnsibleLintAll(workspaceRoot, 'json');
+            const result = await Executor.runAnsibleLintAll(workspaceRoot, 'pep8');
             
             progress.report({ increment: 50 });
             
             // Парсим результаты
-            const errors = Parser.parse(result, workspaceRoot, 'json');
+            const errors = Parser.parse(result, workspaceRoot, 'pep8');
             
             progress.report({ increment: 75 });
             
