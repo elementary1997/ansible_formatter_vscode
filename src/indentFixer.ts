@@ -219,8 +219,15 @@ export class IndentFixer {
                 console.log('[IndentFixer] Pre-commit made no changes, falling back to internal fixer.');
             } catch (err) {
                 console.error('[IndentFixer] Pre-commit execution failed, falling back to internal fixer:', err);
-                // Не показываем уведомление - pre-commit опциональный
-                // Просто используем internal fixer
+                // Показываем предупреждение так как pre-commit должен быть установлен
+                vscode.window.showWarningMessage(
+                    'Pre-commit не работает. Убедитесь что он установлен: pip3 install --user pre-commit',
+                    'Установить'
+                ).then(choice => {
+                    if (choice === 'Установить') {
+                        vscode.commands.executeCommand('workbench.action.terminal.new');
+                    }
+                });
             }
         }
 

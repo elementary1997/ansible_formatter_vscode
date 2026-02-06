@@ -203,8 +203,8 @@ async function checkAndInstallDependencies(context: vscode.ExtensionContext) {
     const tools = [
         { name: 'yamllint', cmd: 'yamllint --version' },
         { name: 'ansible-lint', cmd: 'ansible-lint --version' },
-        { name: 'ansible', cmd: 'ansible --version' }
-        // pre-commit опциональный, устанавливается только если нужен
+        { name: 'ansible', cmd: 'ansible --version' },
+        { name: 'pre-commit', cmd: 'pre-commit --version' }
     ];
 
     const missing: string[] = [];
@@ -257,6 +257,9 @@ async function installDependencies(tools: string[]): Promise<void> {
     if (packagesToInstall.has('ansible-lint')) {
         packagesToInstall.add('ansible');
     }
+    
+    // Добавляем pre-commit как обязательный
+    packagesToInstall.add('pre-commit');
 
     const packages = Array.from(packagesToInstall).join(' ');
 
@@ -350,7 +353,8 @@ async function tryAptInstall(packages: string, outputChannel: vscode.OutputChann
     const aptPackages = packages
         .replace('ansible-lint', 'ansible-lint')
         .replace('yamllint', 'yamllint')
-        .replace('ansible', 'ansible');
+        .replace('ansible', 'ansible')
+        .replace('pre-commit', 'pre-commit');
 
     return new Promise((resolve) => {
         // Сначала проверяем что apt доступен
