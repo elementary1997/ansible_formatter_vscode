@@ -2,6 +2,20 @@
 
 All notable changes to the "Ansible Lint Helper" extension will be documented in this file.
 
+## [1.0.4] - 2026-02-06
+
+### New Features
+
+#### 🔀 Error Sorting
+- **Sort dropdown** in the panel with 3 options:
+  - **Source** (default) - groups by yamllint → pre-commit → ansible-lint
+  - **Severity** - groups by ❌ Errors → ⚠️ Warnings → ℹ️ Info with colored headers
+  - **Line** - sorts by line number within each file
+- Sort preference is saved and restored on panel reopen
+- Visual severity sections with colored borders when sorting by severity
+
+---
+
 ## [1.0.3] - 2026-02-06
 
 ### New Features

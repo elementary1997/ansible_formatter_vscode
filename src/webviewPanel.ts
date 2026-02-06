@@ -213,6 +213,36 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             background: var(--vscode-button-background);
         }
 
+        .sort-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            padding: 8px;
+            background: var(--vscode-editor-background);
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+
+        .sort-bar label {
+            color: var(--vscode-descriptionForeground);
+        }
+
+        .sort-bar select {
+            background: var(--vscode-dropdown-background);
+            color: var(--vscode-dropdown-foreground);
+            border: 1px solid var(--vscode-dropdown-border);
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 0.9em;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .sort-bar select:hover {
+            border-color: var(--vscode-focusBorder);
+        }
+
         .error-group {
             margin-bottom: 15px;
         }
@@ -446,6 +476,46 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             background: rgba(255, 165, 0, 0.3);
             display: inline-block;
         }
+
+        .severity-section {
+            margin-bottom: 15px;
+        }
+
+        .severity-header {
+            padding: 10px 12px;
+            font-weight: bold;
+            font-size: 0.9em;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+
+        .severity-error-header {
+            background: rgba(255, 0, 0, 0.15);
+            color: var(--vscode-errorForeground);
+            border-left: 3px solid var(--vscode-errorForeground);
+        }
+
+        .severity-warning-header {
+            background: rgba(255, 165, 0, 0.15);
+            color: var(--vscode-editorWarning-foreground);
+            border-left: 3px solid var(--vscode-editorWarning-foreground);
+        }
+
+        .severity-info-header {
+            background: rgba(0, 150, 255, 0.15);
+            color: var(--vscode-editorInfo-foreground);
+            border-left: 3px solid var(--vscode-editorInfo-foreground);
+        }
+
+        .source-divider {
+            padding: 8px 12px;
+            margin: 8px 0;
+            font-weight: bold;
+            font-size: 0.85em;
+            color: var(--vscode-descriptionForeground);
+            border-top: 1px solid var(--vscode-panel-border);
+            border-bottom: 1px solid var(--vscode-panel-border);
+        }
     </style>
 </head>
 <body>
@@ -458,6 +528,14 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             <button onclick="fixAll()" title="Fix all files">Fix All</button>
             <button onclick="openSettings()" title="Open Settings" class="settings-btn">⚙️</button>
         </div>
+    </div>
+    <div class="sort-bar">
+        <label>Sort by:</label>
+        <select id="sortSelect" onchange="applySorting()">
+            <option value="source">Source (yamllint → pre-commit → ansible-lint)</option>
+            <option value="severity">Severity (Errors → Warnings → Info)</option>
+            <option value="line">Line number</option>
+        </select>
     </div>
 
     <div id="errors-container">
@@ -472,13 +550,18 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
 
     <script>
         const vscode = acquireVsCodeApi();
+        let currentErrors = []; // Храним текущие ошибки для пересортировки
 
         // Восстанавливаем сохраненное состояние при загрузке
         window.addEventListener('load', () => {
             const state = vscode.getState();
             if (state && state.errors) {
                 console.log('[Webview] Restoring state:', state.errors.length, 'errors');
-                updateErrorsUI(state.errors);
+                currentErrors = state.errors;
+                if (state.sortBy) {
+                    document.getElementById('sortSelect').value = state.sortBy;
+                }
+                updateErrorsUI(currentErrors);
             }
         });
 
@@ -486,13 +569,65 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             const message = event.data;
 
             if (message.type === 'updateErrors') {
-                updateErrorsUI(message.errors);
+                currentErrors = message.errors;
+                updateErrorsUI(currentErrors);
                 // Сохраняем состояние для восстановления
-                vscode.setState({ errors: message.errors });
+                const sortBy = document.getElementById('sortSelect').value;
+                vscode.setState({ errors: currentErrors, sortBy: sortBy });
             }
         });
 
+        function getSeverityOrder(severity) {
+            if (severity === 'error') return 0;
+            if (severity === 'warning') return 1;
+            return 2; // info
+        }
+
+        function getSourceOrder(checkGroup) {
+            if (checkGroup === 'yamllint') return 0;
+            if (checkGroup === 'pre-commit') return 1;
+            if (checkGroup === 'ansible-lint') return 2;
+            return 3;
+        }
+
+        function sortErrors(errors, sortBy) {
+            const sorted = [...errors];
+
+            if (sortBy === 'severity') {
+                sorted.sort((a, b) => {
+                    const severityDiff = getSeverityOrder(a.severity) - getSeverityOrder(b.severity);
+                    if (severityDiff !== 0) return severityDiff;
+                    // Внутри одного severity - по файлу и строке
+                    if (a.file !== b.file) return a.file.localeCompare(b.file);
+                    return a.line - b.line;
+                });
+            } else if (sortBy === 'line') {
+                sorted.sort((a, b) => {
+                    if (a.file !== b.file) return a.file.localeCompare(b.file);
+                    return a.line - b.line;
+                });
+            } else {
+                // По умолчанию - по источнику (yamllint → pre-commit → ansible-lint)
+                sorted.sort((a, b) => {
+                    if (a.file !== b.file) return a.file.localeCompare(b.file);
+                    const sourceDiff = getSourceOrder(a.checkGroup) - getSourceOrder(b.checkGroup);
+                    if (sourceDiff !== 0) return sourceDiff;
+                    return a.line - b.line;
+                });
+            }
+
+            return sorted;
+        }
+
+        function applySorting() {
+            const sortBy = document.getElementById('sortSelect').value;
+            vscode.setState({ errors: currentErrors, sortBy: sortBy });
+            updateErrorsUI(currentErrors);
+        }
+
         function updateErrorsUI(errors) {
+            const sortBy = document.getElementById('sortSelect').value;
+            errors = sortErrors(errors, sortBy);
             const container = document.getElementById('errors-container');
             const stats = document.getElementById('stats');
 
@@ -526,9 +661,70 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
 
             stats.textContent = \`\${errorCount} errors, \${warningCount} warnings\`;
 
+            // Функция рендеринга одной ошибки
+            function renderError(error) {
+                const severityIcon = error.severity === 'error' ? '❌' : error.severity === 'warning' ? '⚠️' : 'ℹ️';
+                const source = error.checkGroup || error.source || 'unknown';
+                const showIgnore = source !== 'pre-commit';
+
+                return \`
+                    <div class="error-item \${error.severity}">
+                        <div class="error-header-compact" onclick="gotoError('\${error.fullPath}', \${error.line})">
+                            <span class="severity-icon">\${severityIcon}</span>
+                            <span class="error-source">[\${source}]</span>
+                            <span class="error-rule-name">\${error.rule}</span>
+                            <span class="error-location-inline">Line \${error.line}\${error.column ? ':' + error.column : ''}</span>
+                        </div>
+                        <div class="error-detailed-message" onclick="gotoError('\${error.fullPath}', \${error.line})">
+                            \${escapeHtml(error.detailedExplanation || error.message)}
+                        </div>
+                        <div class="error-actions">
+                            \${error.fixable ? '<span class="fixable-badge">🔧 Auto-fixable</span>' : ''}
+                            \${showIgnore ? '<span class="ignore-btn" onclick="event.stopPropagation(); ignoreRule(\\'' + error.rule + '\\', \\'' + source + '\\')">🚫 Ignore</span>' : ''}
+                        </div>
+                    </div>
+                \`;
+            }
+
             // Рендерим ошибки
             let html = '';
             let fileIndex = 0;
+
+            // При сортировке по severity - показываем секции по severity
+            if (sortBy === 'severity') {
+                const errorErrors = errors.filter(e => e.severity === 'error');
+                const warningErrors = errors.filter(e => e.severity === 'warning');
+                const infoErrors = errors.filter(e => e.severity !== 'error' && e.severity !== 'warning');
+
+                if (errorErrors.length > 0) {
+                    html += \`<div class="severity-section"><div class="severity-header severity-error-header">❌ ERRORS (\${errorErrors.length})</div>\`;
+                    for (const error of errorErrors) {
+                        html += renderError(error);
+                    }
+                    html += '</div>';
+                }
+
+                if (warningErrors.length > 0) {
+                    html += \`<div class="severity-section"><div class="severity-header severity-warning-header">⚠️ WARNINGS (\${warningErrors.length})</div>\`;
+                    for (const error of warningErrors) {
+                        html += renderError(error);
+                    }
+                    html += '</div>';
+                }
+
+                if (infoErrors.length > 0) {
+                    html += \`<div class="severity-section"><div class="severity-header severity-info-header">ℹ️ INFO (\${infoErrors.length})</div>\`;
+                    for (const error of infoErrors) {
+                        html += renderError(error);
+                    }
+                    html += '</div>';
+                }
+
+                container.innerHTML = html;
+                return;
+            }
+
+            // При других сортировках - группируем по файлам
             for (const [file, fileErrors] of Object.entries(errorsByFile)) {
                 const fileName = fileErrors[0].file;
                 const fileId = 'file-' + fileIndex;
@@ -546,125 +742,42 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                         <div class="file-errors" id="\${fileId}">
                 \`;
 
-                // Группируем по checkGroup
-                const yamllintErrors = fileErrors.filter(e => e.checkGroup === 'yamllint');
-                const preCommitErrors = fileErrors.filter(e => e.checkGroup === 'pre-commit');
-                const ansibleErrors = fileErrors.filter(e => e.checkGroup === 'ansible-lint');
-                const otherErrors = fileErrors.filter(e => !e.checkGroup);
+                if (sortBy === 'source') {
+                    // Группируем по checkGroup
+                    const yamllintErrors = fileErrors.filter(e => e.checkGroup === 'yamllint');
+                    const preCommitErrors = fileErrors.filter(e => e.checkGroup === 'pre-commit');
+                    const ansibleErrors = fileErrors.filter(e => e.checkGroup === 'ansible-lint');
+                    const otherErrors = fileErrors.filter(e => !e.checkGroup);
 
-                // Yamllint ошибки (первые - YAML синтаксис)
-                if (yamllintErrors.length > 0) {
-                    html += \`
-                        <div style="padding: 8px 12px; margin: 8px 0; font-weight: bold; font-size: 0.85em; color: var(--vscode-descriptionForeground); border-top: 1px solid var(--vscode-panel-border); border-bottom: 1px solid var(--vscode-panel-border);">
-                            ━━━ YAMLLINT CHECKS ━━━
-                        </div>
-                    \`;
-
-                    for (const error of yamllintErrors) {
-                        const severityIcon = error.severity === 'error' ? '❌' : error.severity === 'warning' ? '⚠️' : 'ℹ️';
-
-                        html += \`
-                            <div class="error-item \${error.severity}">
-                                <div class="error-header-compact" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                    <span class="severity-icon">\${severityIcon}</span>
-                                    <span class="error-source">[yamllint]</span>
-                                    <span class="error-rule-name">\${error.rule}</span>
-                                    <span class="error-location-inline">Line \${error.line}\${error.column ? ':\${error.column}' : ''}</span>
-                                </div>
-                                <div class="error-detailed-message" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                    \${escapeHtml(error.detailedExplanation || error.message)}
-                                </div>
-                                <div class="error-actions">
-                                    \${error.fixable ? '<span class="fixable-badge">🔧 Auto-fixable</span>' : ''}
-                                    <span class="ignore-btn" onclick="event.stopPropagation(); ignoreRule('\${error.rule}', 'yamllint')">🚫 Ignore</span>
-                                </div>
-                            </div>
-                        \`;
+                    if (yamllintErrors.length > 0) {
+                        html += '<div class="source-divider">━━━ YAMLLINT ━━━</div>';
+                        for (const error of yamllintErrors) {
+                            html += renderError(error);
+                        }
                     }
-                }
 
-                // Pre-commit ошибки
-                if (preCommitErrors.length > 0) {
-                    html += \`
-                        <div style="padding: 8px 12px; margin: 8px 0; font-weight: bold; font-size: 0.85em; color: var(--vscode-descriptionForeground); border-top: 1px solid var(--vscode-panel-border); border-bottom: 1px solid var(--vscode-panel-border);">
-                            ━━━ PRE-COMMIT CHECKS ━━━
-                        </div>
-                    \`;
-
-                    for (const error of preCommitErrors) {
-                        const severityIcon = error.severity === 'error' ? '❌' : error.severity === 'warning' ? '⚠️' : 'ℹ️';
-
-                        html += \`
-                            <div class="error-item \${error.severity}">
-                                <div class="error-header-compact" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                    <span class="severity-icon">\${severityIcon}</span>
-                                    <span class="error-source">[pre-commit]</span>
-                                    <span class="error-rule-name">\${error.rule}</span>
-                                    <span class="error-location-inline">Line \${error.line}\${error.column ? ':\${error.column}' : ''}</span>
-                                </div>
-                                <div class="error-detailed-message" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                    \${escapeHtml(error.detailedExplanation || error.message)}
-                                </div>
-                                <div class="error-actions">
-                                    \${error.fixable ? '<span class="fixable-badge">🔧 Auto-fixable</span>' : ''}
-                                </div>
-                            </div>
-                        \`;
+                    if (preCommitErrors.length > 0) {
+                        html += '<div class="source-divider">━━━ PRE-COMMIT ━━━</div>';
+                        for (const error of preCommitErrors) {
+                            html += renderError(error);
+                        }
                     }
-                }
 
-                // Ansible-lint ошибки
-                if (ansibleErrors.length > 0) {
-                    html += \`
-                        <div style="padding: 8px 12px; margin: 8px 0; font-weight: bold; font-size: 0.85em; color: var(--vscode-descriptionForeground); border-top: 1px solid var(--vscode-panel-border); border-bottom: 1px solid var(--vscode-panel-border);">
-                            ━━━ ANSIBLE-LINT CHECKS ━━━
-                        </div>
-                    \`;
-
-                    for (const error of ansibleErrors) {
-                        const severityIcon = error.severity === 'error' ? '❌' : error.severity === 'warning' ? '⚠️' : 'ℹ️';
-
-                        html += \`
-                            <div class="error-item \${error.severity}">
-                                <div class="error-header-compact" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                    <span class="severity-icon">\${severityIcon}</span>
-                                    <span class="error-source">[ansible-lint]</span>
-                                    <span class="error-rule-name">\${error.rule}</span>
-                                    <span class="error-location-inline">Line \${error.line}\${error.column ? ':\${error.column}' : ''}</span>
-                                </div>
-                                <div class="error-detailed-message" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                    \${escapeHtml(error.detailedExplanation || error.message)}
-                                </div>
-                                <div class="error-actions">
-                                    \${error.fixable ? '<span class="fixable-badge">🔧 Auto-fixable</span>' : ''}
-                                    <span class="ignore-btn" onclick="event.stopPropagation(); ignoreRule('\${error.rule}', 'ansible-lint')">🚫 Ignore</span>
-                                </div>
-                            </div>
-                        \`;
+                    if (ansibleErrors.length > 0) {
+                        html += '<div class="source-divider">━━━ ANSIBLE-LINT ━━━</div>';
+                        for (const error of ansibleErrors) {
+                            html += renderError(error);
+                        }
                     }
-                }
 
-                // Ошибки без группы
-                for (const error of otherErrors) {
-                    const severityIcon = error.severity === 'error' ? '❌' : error.severity === 'warning' ? '⚠️' : 'ℹ️';
-
-                    html += \`
-                        <div class="error-item \${error.severity}">
-                            <div class="error-header-compact" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                <span class="severity-icon">\${severityIcon}</span>
-                                <span class="error-source">[\${error.source}]</span>
-                                <span class="error-rule-name">\${error.rule}</span>
-                                <span class="error-location-inline">Line \${error.line}\${error.column ? ':\${error.column}' : ''}</span>
-                            </div>
-                            <div class="error-detailed-message" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                \${escapeHtml(error.detailedExplanation || error.message)}
-                            </div>
-                            <div class="error-actions">
-                                \${error.fixable ? '<span class="fixable-badge">🔧 Auto-fixable</span>' : ''}
-                                <span class="ignore-btn" onclick="event.stopPropagation(); ignoreRule('\${error.rule}', '\${error.source}')">🚫 Ignore</span>
-                            </div>
-                        </div>
-                    \`;
+                    for (const error of otherErrors) {
+                        html += renderError(error);
+                    }
+                } else {
+                    // line или другая сортировка - просто рендерим в текущем порядке
+                    for (const error of fileErrors) {
+                        html += renderError(error);
+                    }
                 }
 
                 html += '</div></div>'; // Закрываем file-errors и error-group
