@@ -309,11 +309,28 @@ async function ignoreAnsibleLintRule(workspaceRoot: string, rule: string): Promi
         content = `---
 profile: production
 
+# Excluded paths - служебные папки и конфиги
 exclude_paths:
+  - .ansible/
   - .cache/
+  - .git/
   - .github/
+  - .vscode/
+  - .idea/
+  - __pycache__/
+  - "*.egg-info/"
   - venv/
+  - .venv/
+  - env/
   - node_modules/
+  - out/
+  - dist/
+  - build/
+  - docs/
+  - "*.md"
+  - .yamllint
+  - .ansible-lint
+  - .pre-commit-config.yaml
 
 skip_list:
 `;
