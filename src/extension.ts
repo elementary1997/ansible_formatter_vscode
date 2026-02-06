@@ -140,8 +140,26 @@ async function runAnsibleLintOnCurrentFile(): Promise<void> {
         }, async (progress) => {
             const allErrors: any[] = [];
             
-            // Шаг 1: Запускаем pre-commit (если доступен)
-            progress.report({ increment: 0, message: 'Running pre-commit...' });
+            // Шаг 1: Запускаем yamllint (YAML синтаксис - самый первый)
+            progress.report({ increment: 0, message: 'Running yamllint...' });
+            try {
+                const yamllintResult = await Executor.runYamllint(filePath, workspaceRoot);
+                const yamllintErrors = Parser.parse(yamllintResult, workspaceRoot, 'yamllint');
+                
+                if (yamllintErrors.length > 0) {
+                    // Добавляем метаданные о группе
+                    yamllintErrors.forEach(error => {
+                        error.checkGroup = 'yamllint';
+                    });
+                    allErrors.push(...yamllintErrors);
+                }
+            } catch (error: any) {
+                console.log('[Extension] yamllint not available or failed:', error.message);
+            }
+            
+            progress.report({ increment: 20, message: 'Running pre-commit...' });
+            
+            // Шаг 2: Запускаем pre-commit (если доступен)
             try {
                 const preCommitResult = await Executor.runPreCommit(filePath, workspaceRoot);
                 const preCommitErrors = Parser.parse(preCommitResult, workspaceRoot, 'pre-commit');
@@ -157,9 +175,9 @@ async function runAnsibleLintOnCurrentFile(): Promise<void> {
                 console.log('[Extension] pre-commit not available or failed:', error.message);
             }
             
-            progress.report({ increment: 40, message: 'Running ansible-lint...' });
+            progress.report({ increment: 50, message: 'Running ansible-lint...' });
             
-            // Шаг 2: Запускаем ansible-lint
+            // Шаг 3: Запускаем ansible-lint (Ansible best practices)
             const ansibleResult = await Executor.runAnsibleLint(filePath, workspaceRoot, 'pep8');
             const ansibleErrors = Parser.parse(ansibleResult, workspaceRoot, 'pep8');
             
@@ -171,7 +189,7 @@ async function runAnsibleLintOnCurrentFile(): Promise<void> {
                 allErrors.push(...ansibleErrors);
             }
             
-            progress.report({ increment: 80 });
+            progress.report({ increment: 90 });
             
             // Обновляем UI
             diagnosticsProvider.updateDiagnostics(allErrors);
@@ -211,41 +229,79 @@ async function runAnsibleLintOnAllFiles(): Promise<void> {
     try {
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
-            title: 'Running ansible-lint on all files...',
+            title: 'Running all checks on workspace...',
             cancellable: false
         }, async (progress) => {
-            progress.report({ increment: 0 });
+            const allErrors: any[] = [];
             
-            // Запускаем ansible-lint на всех файлах
+            // Шаг 1: Запускаем yamllint на всех файлах
+            progress.report({ increment: 0, message: 'Running yamllint...' });
+            try {
+                const yamllintResult = await Executor.runYamllintAll(workspaceRoot);
+                const yamllintErrors = Parser.parse(yamllintResult, workspaceRoot, 'yamllint');
+                
+                if (yamllintErrors.length > 0) {
+                    yamllintErrors.forEach(error => {
+                        error.checkGroup = 'yamllint';
+                    });
+                    allErrors.push(...yamllintErrors);
+                }
+            } catch (error: any) {
+                console.log('[Extension] yamllint not available or failed:', error.message);
+            }
+            
+            progress.report({ increment: 20, message: 'Running pre-commit...' });
+            
+            // Шаг 2: Запускаем pre-commit на всех файлах
+            try {
+                const preCommitResult = await Executor.runPreCommitAll(workspaceRoot);
+                const preCommitErrors = Parser.parse(preCommitResult, workspaceRoot, 'pre-commit');
+                
+                if (preCommitErrors.length > 0) {
+                    preCommitErrors.forEach(error => {
+                        error.checkGroup = 'pre-commit';
+                    });
+                    allErrors.push(...preCommitErrors);
+                }
+            } catch (error: any) {
+                console.log('[Extension] pre-commit not available or failed:', error.message);
+            }
+            
+            progress.report({ increment: 50, message: 'Running ansible-lint...' });
+            
+            // Шаг 3: Запускаем ansible-lint на всех файлах
             const result = await Executor.runAnsibleLintAll(workspaceRoot, 'pep8');
+            const ansibleErrors = Parser.parse(result, workspaceRoot, 'pep8');
             
-            progress.report({ increment: 50 });
+            if (ansibleErrors.length > 0) {
+                ansibleErrors.forEach(error => {
+                    error.checkGroup = 'ansible-lint';
+                });
+                allErrors.push(...ansibleErrors);
+            }
             
-            // Парсим результаты
-            const errors = Parser.parse(result, workspaceRoot, 'pep8');
-            
-            progress.report({ increment: 75 });
+            progress.report({ increment: 90 });
             
             // Обновляем UI
-            diagnosticsProvider.updateDiagnostics(errors);
-            webviewPanel.updateErrors(errors);
+            diagnosticsProvider.updateDiagnostics(allErrors);
+            webviewPanel.updateErrors(allErrors);
             
             progress.report({ increment: 100 });
             
             // Показываем статистику
-            if (errors.length === 0) {
+            if (allErrors.length === 0) {
                 vscode.window.showInformationMessage('✓ No errors found');
             } else {
-                const errorCount = errors.filter(e => e.severity === 'error').length;
-                const warningCount = errors.filter(e => e.severity === 'warning').length;
-                const filesCount = new Set(errors.map(e => e.file)).size;
+                const errorCount = allErrors.filter(e => e.severity === 'error').length;
+                const warningCount = allErrors.filter(e => e.severity === 'warning').length;
+                const filesCount = new Set(allErrors.map(e => e.file)).size;
                 vscode.window.showInformationMessage(
                     `Found ${errorCount} errors and ${warningCount} warnings in ${filesCount} files`
                 );
             }
         });
     } catch (error: any) {
-        vscode.window.showErrorMessage(`ansible-lint failed: ${error.message}`);
+        vscode.window.showErrorMessage(`Linting failed: ${error.message}`);
     }
 }
 

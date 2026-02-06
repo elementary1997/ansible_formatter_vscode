@@ -1,0 +1,130 @@
+---
+# yamllint configuration for Ansible projects
+# Full validation with best practices
+
+extends: default
+
+rules:
+  # Braces - enforce spacing in braces
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+    min-spaces-inside-empty: 0
+    max-spaces-inside-empty: 0
+
+  # Brackets - enforce spacing in brackets
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 0
+    min-spaces-inside-empty: 0
+    max-spaces-inside-empty: 0
+
+  # Colons - enforce spacing after colons
+  colons:
+    max-spaces-before: 0
+    max-spaces-after: 1
+
+  # Commas - enforce spacing after commas
+  commas:
+    max-spaces-before: 0
+    min-spaces-after: 1
+    max-spaces-after: 1
+
+  # Comments - enforce comment formatting
+  comments:
+    require-starting-space: true
+    ignore-shebangs: true
+    min-spaces-from-content: 2
+    level: warning
+
+  # Comments indentation - align comments with content
+  comments-indentation:
+    level: warning
+
+  # Document start - require document start marker
+  document-start:
+    present: false  # Ansible doesn't always require ---
+    level: warning
+
+  # Document end - don't require document end marker
+  document-end: disable
+
+  # Empty lines - control blank lines
+  empty-lines:
+    max: 2
+    max-start: 0
+    max-end: 1
+
+  # Empty values - allow empty values for Ansible
+  empty-values:
+    forbid-in-block-mappings: false
+    forbid-in-flow-mappings: true
+
+  # Hyphens - enforce spacing after hyphens
+  hyphens:
+    max-spaces-after: 1
+
+  # Indentation - enforce consistent indentation (2 spaces for Ansible)
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+
+  # Key duplicates - forbid duplicate keys
+  key-duplicates: enable
+
+  # Key ordering - don't enforce key ordering (Ansible has specific requirements)
+  key-ordering: disable
+
+  # Line length - enforce reasonable line length
+  line-length:
+    max: 160
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+    level: warning
+
+  # New line at end of file
+  new-line-at-end-of-file: enable
+
+  # New lines - enforce Unix-style line endings
+  new-lines:
+    type: unix
+
+  # Octal values - forbid implicit octal values
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: false  # Ansible uses explicit octal for file modes
+
+  # Quoted strings - control string quoting (relaxed for Ansible)
+  quoted-strings:
+    quote-type: any
+    required: false
+    check-keys: false
+    level: warning
+
+  # Trailing spaces - forbid trailing spaces
+  trailing-spaces: enable
+
+  # Truthy values - enforce consistent boolean representation
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no']
+    check-keys: false
+    level: warning
+
+# Ignore patterns
+ignore: |
+  .git/
+  .venv/
+  venv/
+  __pycache__/
+  *.pyc
+  .tox/
+  .cache/
+  .pytest_cache/
+  .mypy_cache/
+  dist/
+  build/
+  *.egg-info/
+  node_modules/
+  .vscode/
+  .idea/

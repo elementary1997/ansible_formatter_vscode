@@ -32,7 +32,7 @@ export interface LintError {
     documentationUrl?: string;
     
     /** Группа проверки (для разделителей) */
-    checkGroup?: 'pre-commit' | 'ansible-lint';
+    checkGroup?: 'yamllint' | 'pre-commit' | 'ansible-lint';
 }
 
 /**

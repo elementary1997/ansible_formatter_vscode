@@ -95,6 +95,20 @@ export class Executor {
     }
     
     /**
+     * Получить путь к yamllint из конфигурации или автоопределение
+     */
+    public static getYamllintPath(workspaceRoot?: string): string {
+        const config = vscode.workspace.getConfiguration('ansible-lint');
+        const customPath = config.get<string>('yamllintPath');
+        
+        if (customPath && customPath.trim() !== '') {
+            return customPath;
+        }
+        
+        return this.findExecutable('yamllint', workspaceRoot);
+    }
+    
+    /**
      * Запуск команды через child_process
      */
     private static async runCommand(
@@ -241,6 +255,56 @@ export class Executor {
             };
         } catch (error: any) {
             throw new Error(`pre-commit failed: ${error.message}`);
+        }
+    }
+    
+    /**
+     * Запуск yamllint на файле
+     */
+    public static async runYamllint(
+        filePath: string,
+        workspaceRoot: string
+    ): Promise<LintResult> {
+        const startTime = Date.now();
+        const yamllintPath = this.getYamllintPath(workspaceRoot);
+        const relativePath = path.relative(workspaceRoot, filePath);
+        const command = `"${yamllintPath}" -f parsable "${relativePath}"`;
+        
+        try {
+            const result = await this.runCommand(command, workspaceRoot);
+            return {
+                errors: [], // Будет заполнено парсером
+                exitCode: result.exitCode,
+                stdout: result.stdout,
+                stderr: result.stderr,
+                executionTime: Date.now() - startTime
+            };
+        } catch (error: any) {
+            throw new Error(`yamllint failed: ${error.message}`);
+        }
+    }
+    
+    /**
+     * Запуск yamllint на всех yaml файлах
+     */
+    public static async runYamllintAll(
+        workspaceRoot: string
+    ): Promise<LintResult> {
+        const startTime = Date.now();
+        const yamllintPath = this.getYamllintPath(workspaceRoot);
+        const command = `"${yamllintPath}" -f parsable .`;
+        
+        try {
+            const result = await this.runCommand(command, workspaceRoot);
+            return {
+                errors: [], // Будет заполнено парсером
+                exitCode: result.exitCode,
+                stdout: result.stdout,
+                stderr: result.stderr,
+                executionTime: Date.now() - startTime
+            };
+        } catch (error: any) {
+            throw new Error(`yamllint failed: ${error.message}`);
         }
     }
     

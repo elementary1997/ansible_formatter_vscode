@@ -302,6 +302,58 @@ export class Parser {
     }
     
     /**
+     * Парсинг вывода yamllint (parsable format)
+     */
+    public static parseYamllint(
+        stdout: string,
+        workspaceRoot: string
+    ): LintError[] {
+        const errors: LintError[] = [];
+        
+        if (!stdout || stdout.trim() === '') {
+            return errors;
+        }
+        
+        // Очищаем ANSI коды
+        stdout = stripAnsiCodes(stdout);
+        
+        console.log('[Parser] Yamllint output:', stdout);
+        
+        const lines = stdout.split('\n');
+        
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            
+            // Формат parsable: filename:line:column: [severity] message (rule)
+            // Example: main.yml:19:5: [error] syntax error: expected <block end>, but found '?' (syntax)
+            const match = line.match(/^(.+?):(\d+):(\d+):\s*\[(\w+)\]\s*(.+?)\s*\(([^)]+)\)$/);
+            
+            if (match) {
+                const [, file, lineNum, col, severity, message, rule] = match;
+                const filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
+                
+                console.log('[Parser] yamllint error:', {file, lineNum, col, severity, message, rule});
+                
+                errors.push({
+                    file: filePath,
+                    line: parseInt(lineNum, 10),
+                    column: parseInt(col, 10),
+                    rule: rule.trim(),
+                    message: message.trim(),
+                    severity: severity.toLowerCase() === 'error' ? 'error' : 'warning',
+                    source: 'yamllint',
+                    fixable: false,
+                    documentationUrl: `https://yamllint.readthedocs.io/en/stable/rules.html#module-yamllint.rules.${rule.trim()}`
+                });
+            }
+        }
+        
+        console.log('[Parser] Total yamllint errors found:', errors.length);
+        
+        return errors;
+    }
+    
+    /**
      * Определяет, можно ли исправить ошибку автоматически
      */
     private static isFixable(rule: string): boolean {
@@ -339,7 +391,7 @@ export class Parser {
     public static parse(
         result: LintResult,
         workspaceRoot: string,
-        format?: 'json' | 'pep8' | 'pre-commit'
+        format?: 'json' | 'pep8' | 'pre-commit' | 'yamllint'
     ): LintError[] {
         // Комбинируем stdout и stderr для более полной информации
         const output = (result.stdout || '') + '\n' + (result.stderr || '');
@@ -370,6 +422,9 @@ export class Parser {
                 break;
             case 'pre-commit':
                 errors = this.parsePreCommit(output, workspaceRoot);
+                break;
+            case 'yamllint':
+                errors = this.parseYamllint(output, workspaceRoot);
                 break;
         }
         

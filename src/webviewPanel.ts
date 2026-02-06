@@ -359,9 +359,31 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                 \`;
                 
                 // Группируем по checkGroup
+                const yamllintErrors = fileErrors.filter(e => e.checkGroup === 'yamllint');
                 const preCommitErrors = fileErrors.filter(e => e.checkGroup === 'pre-commit');
                 const ansibleErrors = fileErrors.filter(e => e.checkGroup === 'ansible-lint');
                 const otherErrors = fileErrors.filter(e => !e.checkGroup);
+                
+                // Yamllint ошибки (первые - YAML синтаксис)
+                if (yamllintErrors.length > 0) {
+                    html += \`
+                        <div style="padding: 8px 12px; margin: 8px 0; font-weight: bold; font-size: 0.85em; color: var(--vscode-descriptionForeground); border-top: 1px solid var(--vscode-panel-border); border-bottom: 1px solid var(--vscode-panel-border);">
+                            ━━━ YAMLLINT CHECKS ━━━
+                        </div>
+                    \`;
+                    
+                    for (const error of yamllintErrors) {
+                        html += \`
+                            <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
+                                <div class="error-header">
+                                    <span class="error-location">Line \${error.line}</span>
+                                    <span class="error-rule">[\${error.rule}]</span>
+                                </div>
+                                <div class="error-message">\${escapeHtml(error.message)}</div>
+                            </div>
+                        \`;
+                    }
+                }
                 
                 // Pre-commit ошибки
                 if (preCommitErrors.length > 0) {
