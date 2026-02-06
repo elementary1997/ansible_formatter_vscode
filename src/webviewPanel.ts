@@ -220,8 +220,8 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         }
 
         .error-item {
-            padding: 8px 12px;
-            margin: 3px 0;
+            padding: 5px 10px;
+            margin: 2px 0;
             background: var(--vscode-editor-background);
             border-left: 3px solid var(--vscode-errorForeground);
             cursor: pointer;
@@ -275,13 +275,12 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         }
 
         /* Новые стили для улучшенного отображения */
-        .error-header-full {
+        .error-header-compact {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            margin-bottom: 8px;
-            flex-wrap: wrap;
-            gap: 8px;
+            margin-bottom: 4px;
+            gap: 6px;
+            font-size: 0.85em;
         }
 
         .error-title {
@@ -351,8 +350,8 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         }
 
         .error-detailed-message {
-            font-size: 0.9em;
-            line-height: 1.6;
+            font-size: 0.85em;
+            line-height: 1.4;
             padding: 8px 0;
             color: var(--vscode-foreground);
             white-space: pre-line;
@@ -492,13 +491,11 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
 
                     for (const error of yamllintErrors) {
                         const severityIcon = error.severity === 'error' ? '❌' : error.severity === 'warning' ? '⚠️' : 'ℹ️';
-                        const severityBadge = error.severity.toUpperCase();
 
                         html += \`
                             <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                <div class="error-header-full">
+                                <div class="error-header-compact">
                                     <span class="severity-icon">\${severityIcon}</span>
-                                    <span class="severity-badge severity-\${error.severity}">\${severityBadge}</span>
                                     <span class="error-source">[yamllint]</span>
                                     <span class="error-rule-name">\${error.rule}</span>
                                     <span class="error-location-inline">Line \${error.line}\${error.column ? ':\${error.column}' : ''}</span>
@@ -522,13 +519,11 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
 
                     for (const error of preCommitErrors) {
                         const severityIcon = error.severity === 'error' ? '❌' : error.severity === 'warning' ? '⚠️' : 'ℹ️';
-                        const severityBadge = error.severity.toUpperCase();
 
                         html += \`
                             <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                <div class="error-header-full">
+                                <div class="error-header-compact">
                                     <span class="severity-icon">\${severityIcon}</span>
-                                    <span class="severity-badge severity-\${error.severity}">\${severityBadge}</span>
                                     <span class="error-source">[pre-commit]</span>
                                     <span class="error-rule-name">\${error.rule}</span>
                                     <span class="error-location-inline">Line \${error.line}\${error.column ? ':\${error.column}' : ''}</span>
@@ -552,13 +547,11 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
 
                     for (const error of ansibleErrors) {
                         const severityIcon = error.severity === 'error' ? '❌' : error.severity === 'warning' ? '⚠️' : 'ℹ️';
-                        const severityBadge = error.severity.toUpperCase();
 
                         html += \`
                             <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                <div class="error-header-full">
+                                <div class="error-header-compact">
                                     <span class="severity-icon">\${severityIcon}</span>
-                                    <span class="severity-badge severity-\${error.severity}">\${severityBadge}</span>
                                     <span class="error-source">[ansible-lint]</span>
                                     <span class="error-rule-name">\${error.rule}</span>
                                     <span class="error-location-inline">Line \${error.line}\${error.column ? ':\${error.column}' : ''}</span>
