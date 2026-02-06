@@ -224,57 +224,86 @@ export class IndentFixer {
         }
 
         const rootPath = workspaceFolder.uri.fsPath;
+        const outputChannel = vscode.window.createOutputChannel('YAML Auto-Fix Debug');
+        
+        outputChannel.appendLine('=== YAML Auto-Fix Debug ===');
+        outputChannel.appendLine(`File: ${document.fileName}`);
+        outputChannel.appendLine(`Workspace: ${rootPath}`);
+        outputChannel.appendLine('');
 
         // СТРАТЕГИЯ АВТОИСПРАВЛЕНИЯ:
         // 1. Попробовать pre-commit (если есть конфиг)
         // 2. Попробовать ansible-lint --fix
-        // 3. Попробовать prettier/yamlfmt
-        // 4. Показать ошибки и предложить исправить вручную
+        // 3. Показать ошибки и предложить исправить вручную
 
         // 1. Pre-commit (лучший вариант)
-        const hasPreCommitConfig = fs.existsSync(path.join(rootPath, '.pre-commit-config.yaml'));
+        const preCommitConfigPath = path.join(rootPath, '.pre-commit-config.yaml');
+        const hasPreCommitConfig = fs.existsSync(preCommitConfigPath);
+        
+        outputChannel.appendLine(`[1] Checking pre-commit config: ${preCommitConfigPath}`);
+        outputChannel.appendLine(`    Exists: ${hasPreCommitConfig}`);
+        
         if (hasPreCommitConfig) {
             try {
+                outputChannel.appendLine('    Trying pre-commit...');
                 console.log('[IndentFixer] Trying pre-commit...');
                 const preCommitResult = await this.runPreCommit(text, activeEditor, rootPath);
+                
                 if (preCommitResult !== text) {
+                    outputChannel.appendLine('    ✅ Pre-commit УСПЕШНО исправил файл!');
                     console.log('[IndentFixer] ✅ Pre-commit fixed the file');
+                    outputChannel.show();
                     return preCommitResult;
+                } else {
+                    outputChannel.appendLine('    ⚠️ Pre-commit выполнился, но не внес изменений');
                 }
             } catch (err: any) {
+                outputChannel.appendLine(`    ❌ Pre-commit ОШИБКА: ${err.message}`);
                 console.error('[IndentFixer] Pre-commit failed:', err);
-                vscode.window.showWarningMessage(
-                    `Pre-commit не сработал: ${err.message}`,
-                    'Показать логи'
-                ).then(choice => {
-                    if (choice === 'Показать логи') {
-                        vscode.window.showInformationMessage(err.message);
-                    }
-                });
             }
         }
 
         // 2. ansible-lint --fix
+        outputChannel.appendLine('');
+        outputChannel.appendLine('[2] Trying ansible-lint --fix...');
         try {
-            console.log('[IndentFixer] Trying ansible-lint --fix...');
             const ansibleLintResult = await this.runAnsibleLintFix(text, document.fileName, rootPath);
+            
             if (ansibleLintResult !== text) {
+                outputChannel.appendLine('    ✅ ansible-lint --fix УСПЕШНО исправил файл!');
                 console.log('[IndentFixer] ✅ ansible-lint fixed the file');
+                outputChannel.show();
                 return ansibleLintResult;
+            } else {
+                outputChannel.appendLine('    ⚠️ ansible-lint --fix выполнился, но не внес изменений');
             }
         } catch (err: any) {
+            outputChannel.appendLine(`    ❌ ansible-lint --fix ОШИБКА: ${err.message}`);
             console.log('[IndentFixer] ansible-lint --fix not available:', err.message);
         }
 
         // 3. Показываем что не смогли исправить автоматически
+        outputChannel.appendLine('');
+        outputChannel.appendLine('=== ИТОГ ===');
+        outputChannel.appendLine('❌ Автоматическое исправление не сработало');
+        outputChannel.appendLine('');
+        outputChannel.appendLine('Возможные причины:');
+        outputChannel.appendLine('1. pre-commit не установлен или не настроен');
+        outputChannel.appendLine('2. ansible-lint не поддерживает --fix для этого файла');
+        outputChannel.appendLine('3. Ошибки слишком сложные для автоисправления');
+        outputChannel.appendLine('');
+        outputChannel.appendLine('Рекомендации:');
+        outputChannel.appendLine('- Посмотрите ошибки yamllint/ansible-lint выше');
+        outputChannel.appendLine('- Исправьте отступы вручную по ошибкам');
+        outputChannel.appendLine('- Запустите в терминале: pre-commit run --files file.yml');
+        outputChannel.show();
+
         vscode.window.showWarningMessage(
-            'Не удалось автоматически исправить. Используйте yamllint/ansible-lint вручную или исправьте по ошибкам выше.',
-            'Открыть терминал'
+            'Не удалось автоматически исправить. Смотрите "YAML Auto-Fix Debug" в Output.',
+            'Показать логи'
         ).then(choice => {
-            if (choice === 'Открыть терминал') {
-                const terminal = vscode.window.createTerminal('YAML Fix');
-                terminal.show();
-                terminal.sendText(`# Исправьте вручную:\n# yamllint --strict ${document.fileName}\n# ansible-lint ${document.fileName}`);
+            if (choice === 'Показать логи') {
+                outputChannel.show();
             }
         });
 
@@ -285,15 +314,30 @@ export class IndentFixer {
         const tempFileName = `.temp_fix_${Date.now()}${path.extname(fileName)}`;
         const tempFilePath = path.join(rootPath, tempFileName);
 
+        console.log(`[IndentFixer] Creating temp file: ${tempFilePath}`);
         fs.writeFileSync(tempFilePath, text);
 
         try {
             await new Promise<void>((resolve, reject) => {
-                cp.exec(`ansible-lint --fix "${tempFileName}"`, { cwd: rootPath }, (error, stdout, stderr) => {
-                    // ansible-lint --fix возвращает 0 если исправил
-                    if (error && error.code !== 0 && error.code !== 2) {
-                        reject(new Error(`ansible-lint failed: ${stderr || error.message}`));
-                        return;
+                const cmd = `ansible-lint --fix "${tempFileName}"`;
+                console.log(`[IndentFixer] Running: ${cmd}`);
+                
+                cp.exec(cmd, { cwd: rootPath, timeout: 30000 }, (error, stdout, stderr) => {
+                    console.log(`[IndentFixer] ansible-lint stdout:`, stdout);
+                    if (stderr) {
+                        console.log(`[IndentFixer] ansible-lint stderr:`, stderr);
+                    }
+                    
+                    // ansible-lint --fix может возвращать:
+                    // 0 - исправил успешно
+                    // 1 - нашел ошибки которые не может исправить
+                    // 2 - исправил, но остались неисправимые
+                    if (error) {
+                        console.log(`[IndentFixer] ansible-lint exit code:`, error.code);
+                        if (error.code !== 0 && error.code !== 1 && error.code !== 2) {
+                            reject(new Error(`Exit code ${error.code}: ${stderr || error.message}`));
+                            return;
+                        }
                     }
                     resolve();
                 });
@@ -304,10 +348,12 @@ export class IndentFixer {
             }
 
             const fixedText = fs.readFileSync(tempFilePath, 'utf-8');
+            console.log(`[IndentFixer] Read fixed text, length: ${fixedText.length}`);
             return fixedText;
         } finally {
             if (fs.existsSync(tempFilePath)) {
                 fs.unlinkSync(tempFilePath);
+                console.log(`[IndentFixer] Cleaned up temp file`);
             }
         }
     }
