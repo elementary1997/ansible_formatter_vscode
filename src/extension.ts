@@ -17,11 +17,11 @@ let statusBarItem: vscode.StatusBarItem;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Ansible Lint Helper is now active!');
-    
+
     // Инициализация провайдеров
     diagnosticsProvider = new DiagnosticsProvider();
     webviewPanel = new WebviewPanel(context.extensionUri);
-    
+
     // Регистрация Webview Provider
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
@@ -29,7 +29,7 @@ export function activate(context: vscode.ExtensionContext) {
             webviewPanel
         )
     );
-    
+
     // Регистрация Code Actions Provider
     context.subscriptions.push(
         vscode.languages.registerCodeActionsProvider(
@@ -40,7 +40,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         )
     );
-    
+
     // Создание Status Bar Item
     statusBarItem = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Left,
@@ -50,7 +50,7 @@ export function activate(context: vscode.ExtensionContext) {
     statusBarItem.command = 'ansible-lint.run';
     statusBarItem.tooltip = 'Run ansible-lint on current file';
     context.subscriptions.push(statusBarItem);
-    
+
     // Показываем кнопку только для YAML/Ansible файлов
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor(editor => {
@@ -61,7 +61,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         })
     );
-    
+
     // Показываем кнопку если текущий файл - YAML
     if (vscode.window.activeTextEditor) {
         const doc = vscode.window.activeTextEditor.document;
@@ -69,44 +69,51 @@ export function activate(context: vscode.ExtensionContext) {
             statusBarItem.show();
         }
     }
-    
+
     // Регистрация команд
     context.subscriptions.push(
         vscode.commands.registerCommand('ansible-lint.run', runAnsibleLintOnCurrentFile)
     );
-    
+
     context.subscriptions.push(
         vscode.commands.registerCommand('ansible-lint.runAll', runAnsibleLintOnAllFiles)
     );
-    
+
     context.subscriptions.push(
         vscode.commands.registerCommand('ansible-lint.runPreCommit', runPreCommit)
     );
-    
+
     context.subscriptions.push(
         vscode.commands.registerCommand('ansible-lint.fixCurrent', fixCurrentFile)
     );
-    
+
     context.subscriptions.push(
         vscode.commands.registerCommand('ansible-lint.fixWithTool', fixWithTool)
     );
-    
+
     context.subscriptions.push(
         vscode.commands.registerCommand('ansible-lint.ignoreRule', ignoreRule)
     );
-    
+
+    // Подписка на события webview панели
+    context.subscriptions.push(
+        webviewPanel.onDidClear(() => {
+            diagnosticsProvider.clear();
+        })
+    );
+
     // Auto-fix on save (если включено в настройках)
     context.subscriptions.push(
         vscode.workspace.onDidSaveTextDocument(async (document) => {
             const config = vscode.workspace.getConfiguration('ansible-lint');
             const autoFix = config.get<boolean>('autoFixOnSave', false);
-            
+
             if (autoFix && (document.languageId === 'yaml' || document.languageId === 'ansible')) {
                 await fixCurrentFile();
             }
         })
     );
-    
+
     context.subscriptions.push(diagnosticsProvider);
 }
 
@@ -115,23 +122,23 @@ export function activate(context: vscode.ExtensionContext) {
  */
 async function runAnsibleLintOnCurrentFile(): Promise<void> {
     const editor = vscode.window.activeTextEditor;
-    
+
     if (!editor) {
         vscode.window.showErrorMessage('No active editor');
         return;
     }
-    
+
     const document = editor.document;
     const filePath = document.uri.fsPath;
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
-    
+
     if (!workspaceFolder) {
         vscode.window.showErrorMessage('File is not in a workspace');
         return;
     }
-    
+
     const workspaceRoot = workspaceFolder.uri.fsPath;
-    
+
     try {
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
@@ -139,13 +146,13 @@ async function runAnsibleLintOnCurrentFile(): Promise<void> {
             cancellable: false
         }, async (progress) => {
             const allErrors: any[] = [];
-            
+
             // Шаг 1: Запускаем yamllint (YAML синтаксис - самый первый)
             progress.report({ increment: 0, message: 'Running yamllint...' });
             try {
                 const yamllintResult = await Executor.runYamllint(filePath, workspaceRoot);
                 const yamllintErrors = Parser.parse(yamllintResult, workspaceRoot, 'yamllint');
-                
+
                 if (yamllintErrors.length > 0) {
                     // Добавляем метаданные о группе
                     yamllintErrors.forEach(error => {
@@ -156,14 +163,14 @@ async function runAnsibleLintOnCurrentFile(): Promise<void> {
             } catch (error: any) {
                 console.log('[Extension] yamllint not available or failed:', error.message);
             }
-            
+
             progress.report({ increment: 20, message: 'Running pre-commit...' });
-            
+
             // Шаг 2: Запускаем pre-commit (если доступен)
             try {
                 const preCommitResult = await Executor.runPreCommit(filePath, workspaceRoot);
                 const preCommitErrors = Parser.parse(preCommitResult, workspaceRoot, 'pre-commit');
-                
+
                 if (preCommitErrors.length > 0) {
                     // Добавляем метаданные о группе
                     preCommitErrors.forEach(error => {
@@ -174,38 +181,38 @@ async function runAnsibleLintOnCurrentFile(): Promise<void> {
             } catch (error: any) {
                 console.log('[Extension] pre-commit not available or failed:', error.message);
             }
-            
+
             progress.report({ increment: 50, message: 'Running ansible-lint...' });
-            
+
             // Шаг 3: Запускаем ansible-lint (Ansible best practices)
             const ansibleResult = await Executor.runAnsibleLint(filePath, workspaceRoot, 'pep8');
             const ansibleErrors = Parser.parse(ansibleResult, workspaceRoot, 'pep8');
-            
+
             if (ansibleErrors.length > 0) {
                 // Фильтруем load-failure ошибки если уже есть syntax ошибки от yamllint
-                const hasYamlSyntaxErrors = allErrors.some(e => 
+                const hasYamlSyntaxErrors = allErrors.some(e =>
                     e.source === 'yamllint' && e.rule === 'syntax'
                 );
-                
+
                 const filteredAnsibleErrors = hasYamlSyntaxErrors
                     ? ansibleErrors.filter(e => !e.rule.includes('load-failure'))
                     : ansibleErrors;
-                
+
                 // Добавляем метаданные о группе
                 filteredAnsibleErrors.forEach(error => {
                     error.checkGroup = 'ansible-lint';
                 });
                 allErrors.push(...filteredAnsibleErrors);
             }
-            
+
             progress.report({ increment: 90 });
-            
+
             // Обновляем UI
             diagnosticsProvider.updateDiagnostics(allErrors);
             webviewPanel.updateErrors(allErrors);
-            
+
             progress.report({ increment: 100 });
-            
+
             // Показываем статистику
             if (allErrors.length === 0) {
                 vscode.window.showInformationMessage('✓ No errors found');
@@ -227,14 +234,14 @@ async function runAnsibleLintOnCurrentFile(): Promise<void> {
  */
 async function runAnsibleLintOnAllFiles(): Promise<void> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    
+
     if (!workspaceFolders || workspaceFolders.length === 0) {
         vscode.window.showErrorMessage('No workspace folder found');
         return;
     }
-    
+
     const workspaceRoot = workspaceFolders[0].uri.fsPath;
-    
+
     try {
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
@@ -242,13 +249,13 @@ async function runAnsibleLintOnAllFiles(): Promise<void> {
             cancellable: false
         }, async (progress) => {
             const allErrors: any[] = [];
-            
+
             // Шаг 1: Запускаем yamllint на всех файлах
             progress.report({ increment: 0, message: 'Running yamllint...' });
             try {
                 const yamllintResult = await Executor.runYamllintAll(workspaceRoot);
                 const yamllintErrors = Parser.parse(yamllintResult, workspaceRoot, 'yamllint');
-                
+
                 if (yamllintErrors.length > 0) {
                     yamllintErrors.forEach(error => {
                         error.checkGroup = 'yamllint';
@@ -258,14 +265,14 @@ async function runAnsibleLintOnAllFiles(): Promise<void> {
             } catch (error: any) {
                 console.log('[Extension] yamllint not available or failed:', error.message);
             }
-            
+
             progress.report({ increment: 20, message: 'Running pre-commit...' });
-            
+
             // Шаг 2: Запускаем pre-commit на всех файлах
             try {
                 const preCommitResult = await Executor.runPreCommitAll(workspaceRoot);
                 const preCommitErrors = Parser.parse(preCommitResult, workspaceRoot, 'pre-commit');
-                
+
                 if (preCommitErrors.length > 0) {
                     preCommitErrors.forEach(error => {
                         error.checkGroup = 'pre-commit';
@@ -275,37 +282,37 @@ async function runAnsibleLintOnAllFiles(): Promise<void> {
             } catch (error: any) {
                 console.log('[Extension] pre-commit not available or failed:', error.message);
             }
-            
+
             progress.report({ increment: 50, message: 'Running ansible-lint...' });
-            
+
             // Шаг 3: Запускаем ansible-lint на всех файлах
             const result = await Executor.runAnsibleLintAll(workspaceRoot, 'pep8');
             const ansibleErrors = Parser.parse(result, workspaceRoot, 'pep8');
-            
+
             if (ansibleErrors.length > 0) {
                 // Фильтруем load-failure ошибки если уже есть syntax ошибки от yamllint
-                const hasYamlSyntaxErrors = allErrors.some(e => 
+                const hasYamlSyntaxErrors = allErrors.some(e =>
                     e.source === 'yamllint' && e.rule === 'syntax'
                 );
-                
+
                 const filteredAnsibleErrors = hasYamlSyntaxErrors
                     ? ansibleErrors.filter(e => !e.rule.includes('load-failure'))
                     : ansibleErrors;
-                
+
                 filteredAnsibleErrors.forEach(error => {
                     error.checkGroup = 'ansible-lint';
                 });
                 allErrors.push(...filteredAnsibleErrors);
             }
-            
+
             progress.report({ increment: 90 });
-            
+
             // Обновляем UI
             diagnosticsProvider.updateDiagnostics(allErrors);
             webviewPanel.updateErrors(allErrors);
-            
+
             progress.report({ increment: 100 });
-            
+
             // Показываем статистику
             if (allErrors.length === 0) {
                 vscode.window.showInformationMessage('✓ No errors found');
@@ -328,23 +335,23 @@ async function runAnsibleLintOnAllFiles(): Promise<void> {
  */
 async function runPreCommit(): Promise<void> {
     const editor = vscode.window.activeTextEditor;
-    
+
     if (!editor) {
         vscode.window.showErrorMessage('No active editor');
         return;
     }
-    
+
     const document = editor.document;
     const filePath = document.uri.fsPath;
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
-    
+
     if (!workspaceFolder) {
         vscode.window.showErrorMessage('File is not in a workspace');
         return;
     }
-    
+
     const workspaceRoot = workspaceFolder.uri.fsPath;
-    
+
     try {
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
@@ -352,23 +359,23 @@ async function runPreCommit(): Promise<void> {
             cancellable: false
         }, async (progress) => {
             progress.report({ increment: 0 });
-            
+
             // Запускаем pre-commit
             const result = await Executor.runPreCommit(filePath, workspaceRoot);
-            
+
             progress.report({ increment: 50 });
-            
+
             // Парсим результаты
             const errors = Parser.parse(result, workspaceRoot, 'pre-commit');
-            
+
             progress.report({ increment: 75 });
-            
+
             // Обновляем UI
             diagnosticsProvider.updateDiagnostics(errors);
             webviewPanel.updateErrors(errors);
-            
+
             progress.report({ increment: 100 });
-            
+
             // Показываем статистику
             if (errors.length === 0) {
                 vscode.window.showInformationMessage('✓ pre-commit passed');
@@ -388,14 +395,14 @@ async function runPreCommit(): Promise<void> {
  */
 async function fixCurrentFile(): Promise<void> {
     const editor = vscode.window.activeTextEditor;
-    
+
     if (!editor) {
         vscode.window.showErrorMessage('No active editor');
         return;
     }
-    
+
     const document = editor.document;
-    
+
     try {
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
@@ -403,28 +410,28 @@ async function fixCurrentFile(): Promise<void> {
             cancellable: false
         }, async (progress) => {
             progress.report({ increment: 0, message: 'Applying quick fixes...' });
-            
+
             // Шаг 1: Применяем быстрые исправления
             const errors = diagnosticsProvider.getErrorsForFile(document.uri.fsPath);
             const quickEdits = QuickFixer.applyAllQuickFixes(document, errors);
-            
+
             if (quickEdits.length > 0) {
                 const edit = new vscode.WorkspaceEdit();
                 edit.set(document.uri, quickEdits);
                 await vscode.workspace.applyEdit(edit);
             }
-            
+
             progress.report({ increment: 50, message: 'Running ansible-lint --fix...' });
-            
+
             // Шаг 2: Применяем ansible-lint --fix
             await AnsibleLintFixer.fixFile(document);
-            
+
             progress.report({ increment: 100 });
         });
-        
+
         // Перезапускаем проверку
         await runAnsibleLintOnCurrentFile();
-        
+
     } catch (error: any) {
         vscode.window.showErrorMessage(`Failed to fix file: ${error.message}`);
     }
@@ -435,7 +442,7 @@ async function fixCurrentFile(): Promise<void> {
  */
 async function fixWithTool(uriString?: string): Promise<void> {
     let document: vscode.TextDocument;
-    
+
     if (uriString) {
         // URI передан из Code Action
         const uri = vscode.Uri.parse(uriString);
@@ -449,10 +456,10 @@ async function fixWithTool(uriString?: string): Promise<void> {
         }
         document = editor.document;
     }
-    
+
     try {
         const success = await AnsibleLintFixer.fixFile(document);
-        
+
         if (success) {
             // Перезапускаем проверку
             await runAnsibleLintOnCurrentFile();
