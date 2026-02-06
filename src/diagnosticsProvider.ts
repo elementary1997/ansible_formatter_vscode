@@ -8,27 +8,27 @@ import { LintError } from './models/lintError';
 export class DiagnosticsProvider {
     private diagnosticCollection: vscode.DiagnosticCollection;
     private errorsByFile: Map<string, LintError[]> = new Map();
-    
+
     constructor() {
         this.diagnosticCollection = vscode.languages.createDiagnosticCollection('ansible-lint');
     }
-    
+
     /**
      * Обновить диагностику для файлов
      */
     public updateDiagnostics(errors: LintError[]): void {
         // Группируем ошибки по файлам
         this.errorsByFile.clear();
-        
+
         for (const error of errors) {
             const fileErrors = this.errorsByFile.get(error.file) || [];
             fileErrors.push(error);
             this.errorsByFile.set(error.file, fileErrors);
         }
-        
+
         // Очищаем все предыдущие диагностики
         this.diagnosticCollection.clear();
-        
+
         // Создаем диагностики для каждого файла
         for (const [file, fileErrors] of this.errorsByFile.entries()) {
             const uri = vscode.Uri.file(file);
@@ -36,14 +36,14 @@ export class DiagnosticsProvider {
             this.diagnosticCollection.set(uri, diagnostics);
         }
     }
-    
+
     /**
      * Создать VSCode Diagnostics из LintError
      */
     private createDiagnostics(errors: LintError[]): vscode.Diagnostic[] {
         return errors.map(error => this.createDiagnostic(error));
     }
-    
+
     /**
      * Создать одну VSCode Diagnostic из LintError
      */
@@ -51,7 +51,7 @@ export class DiagnosticsProvider {
         // VSCode использует 0-based индексы
         const line = error.line - 1;
         const column = (error.column || 1) - 1;
-        
+
         // Создаем range для ошибки
         const range = new vscode.Range(
             line,
@@ -59,7 +59,7 @@ export class DiagnosticsProvider {
             line,
             column + 50 // Подчеркиваем 50 символов или до конца строки
         );
-        
+
         // Определяем severity
         let severity: vscode.DiagnosticSeverity;
         switch (error.severity) {
@@ -75,31 +75,31 @@ export class DiagnosticsProvider {
             default:
                 severity = vscode.DiagnosticSeverity.Warning;
         }
-        
+
         // Создаем diagnostic
         const diagnostic = new vscode.Diagnostic(
             range,
             error.message,
             severity
         );
-        
+
         // Добавляем метаданные
         diagnostic.code = error.rule;
         diagnostic.source = error.source;
-        
-        // Добавляем связанную информацию
-        if (error.documentationUrl) {
+
+        // Добавляем подробное объяснение как связанную информацию
+        if (error.detailedExplanation) {
             diagnostic.relatedInformation = [
                 new vscode.DiagnosticRelatedInformation(
                     new vscode.Location(
                         vscode.Uri.file(error.file),
                         range
                     ),
-                    `Documentation: ${error.documentationUrl}`
+                    error.detailedExplanation
                 )
             ];
         }
-        
+
         // Добавляем теги
         const tags: vscode.DiagnosticTag[] = [];
         if (error.rule.includes('deprecated')) {
@@ -108,10 +108,10 @@ export class DiagnosticsProvider {
         if (tags.length > 0) {
             diagnostic.tags = tags;
         }
-        
+
         return diagnostic;
     }
-    
+
     /**
      * Очистить все диагностики
      */
@@ -119,7 +119,7 @@ export class DiagnosticsProvider {
         this.diagnosticCollection.clear();
         this.errorsByFile.clear();
     }
-    
+
     /**
      * Очистить диагностики для конкретного файла
      */
@@ -127,14 +127,14 @@ export class DiagnosticsProvider {
         this.diagnosticCollection.delete(uri);
         this.errorsByFile.delete(uri.fsPath);
     }
-    
+
     /**
      * Получить ошибки для файла
      */
     public getErrorsForFile(file: string): LintError[] {
         return this.errorsByFile.get(file) || [];
     }
-    
+
     /**
      * Получить все ошибки
      */
@@ -145,7 +145,7 @@ export class DiagnosticsProvider {
         }
         return allErrors;
     }
-    
+
     /**
      * Dispose
      */

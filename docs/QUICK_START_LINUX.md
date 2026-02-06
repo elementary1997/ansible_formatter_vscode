@@ -15,7 +15,7 @@
    ```bash
    # Убедитесь что вы в директории проекта
    cd ~/Desktops/Desktop1/ansible_formatter_vscode
-   
+
    # Откройте VS Code ИМЕННО В ЭТОЙ ДИРЕКТОРИИ
    code .
    ```
@@ -23,7 +23,7 @@
 2. **Запустите Extension Development Host:**
    - Нажмите **F5** (или Debug → Start Debugging)
    - Или нажмите **Ctrl+Shift+D** и выберите "Run Extension", затем зеленую кнопку
-   
+
 3. **Откроется НОВОЕ окно VS Code с заголовком "[Extension Development Host]"**
    - Это специальное окно для тестирования расширения
    - В ЭТОМ окне расширение будет активно

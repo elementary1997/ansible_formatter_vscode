@@ -136,7 +136,7 @@ rules:
   line-length:
     max: 200  # Увеличить лимит
     level: warning
-  
+
   comments:
     level: warning  # Или disable
 ```

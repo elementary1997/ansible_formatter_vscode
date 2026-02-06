@@ -74,7 +74,7 @@ export class Parser {
                     severity: severity,
                     source: 'ansible-lint',
                     fixable: this.isFixable(rule),
-                    documentationUrl: this.getDocumentationUrl(rule, 'ansible-lint')
+                    detailedExplanation: this.getDetailedExplanation(rule, message, 'ansible-lint')
                 });
             }
         } catch (error: any) {
@@ -132,7 +132,7 @@ export class Parser {
                     severity: 'warning',
                     source: 'ansible-lint',
                     fixable: this.isFixable(rule),
-                    documentationUrl: this.getDocumentationUrl(rule, 'ansible-lint')
+                    detailedExplanation: this.getDetailedExplanation(rule, message.trim(), 'ansible-lint')
                 });
                 continue;
             }
@@ -154,16 +154,17 @@ export class Parser {
                 const [, file, lineNum, col, details] = match3;
                 const filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
 
+                const fullMessage = `${lastMessage}: ${details.trim()}`;
                 errors.push({
                     file: filePath,
                     line: parseInt(lineNum, 10),
                     column: parseInt(col, 10),
                     rule: lastRule,
-                    message: `${lastMessage}: ${details.trim()}`,
+                    message: fullMessage,
                     severity: 'warning',
                     source: 'ansible-lint',
                     fixable: this.isFixable(lastRule),
-                    documentationUrl: this.getDocumentationUrl(lastRule, 'ansible-lint')
+                    detailedExplanation: this.getDetailedExplanation(lastRule, fullMessage, 'ansible-lint')
                 });
 
                 lastRule = '';
@@ -243,7 +244,7 @@ export class Parser {
                     severity: 'info',
                     source: 'pre-commit',
                     fixable: true,
-                    documentationUrl: this.getDocumentationUrl(currentHookId, 'pre-commit')
+                    detailedExplanation: this.getDetailedExplanation(currentHookId, message, 'pre-commit')
                 });
 
                 console.log(`[Parser] Fixing: ${file}`);
@@ -275,7 +276,7 @@ export class Parser {
                     severity: 'error',
                     source: 'pre-commit',
                     fixable: false,
-                    documentationUrl: this.getDocumentationUrl(currentHookId, 'pre-commit')
+                    detailedExplanation: this.getDetailedExplanation(currentHookId, message, 'pre-commit')
                 });
 
                 console.log(`[Parser] Error in ${file}:${lineNum} - ${message}`);
@@ -299,7 +300,7 @@ export class Parser {
                     severity: 'warning',
                     source: 'pre-commit',
                     fixable: false,
-                    documentationUrl: this.getDocumentationUrl(currentHookId, 'pre-commit')
+                    detailedExplanation: this.getDetailedExplanation(currentHookId, message.trim(), 'pre-commit')
                 });
 
                 console.log(`[Parser] File message: ${file} - ${message}`);
@@ -364,7 +365,7 @@ export class Parser {
                     severity: severity.toLowerCase() === 'error' ? 'error' : 'warning',
                     source: 'yamllint',
                     fixable: false,
-                    documentationUrl: this.getDocumentationUrl(rule.trim(), 'yamllint')
+                    detailedExplanation: this.getDetailedExplanation(rule.trim(), message.trim(), 'yamllint')
                 });
             }
         }
@@ -395,37 +396,40 @@ export class Parser {
     }
 
     /**
-     * Получает URL документации для правила
+     * Получает подробное объяснение ошибки
      */
-    private static getDocumentationUrl(rule: string, source?: string): string | undefined {
-        // Извлекаем имя правила из формата yaml[trailing-spaces]
-        const ruleMatch = rule.match(/^([^[]+)\[?([^\]]*)\]?$/);
-        const ruleName = ruleMatch ? ruleMatch[1] : rule;
-        const subRule = ruleMatch && ruleMatch[2] ? ruleMatch[2] : '';
+    private static getDetailedExplanation(rule: string, message: string, source?: string): string {
+        // Базовое сообщение
+        let explanation = message;
 
-        // Генерируем ссылки в зависимости от источника
-        if (source === 'yamllint') {
-            // yamllint documentation
-            if (subRule) {
-                return `https://yamllint.readthedocs.io/en/stable/rules.html#module-yamllint.rules.${subRule}`;
-            }
-            return `https://yamllint.readthedocs.io/en/stable/rules.html`;
-        } else if (source === 'pre-commit') {
-            // pre-commit hooks documentation
-            if (rule.includes('check-yaml')) {
-                return `https://github.com/pre-commit/pre-commit-hooks#check-yaml`;
-            } else if (rule.includes('trailing-whitespace')) {
-                return `https://github.com/pre-commit/pre-commit-hooks#trailing-whitespace`;
-            } else if (rule.includes('end-of-file')) {
-                return `https://github.com/pre-commit/pre-commit-hooks#end-of-file-fixer`;
-            } else if (rule.includes('mixed-line-ending')) {
-                return `https://github.com/pre-commit/pre-commit-hooks#mixed-line-ending`;
-            }
-            return `https://pre-commit.com/`;
-        } else {
-            // ansible-lint documentation
-            return `https://ansible-lint.readthedocs.io/rules/${ruleName}/`;
+        // Добавляем контекстные подсказки в зависимости от правила
+        if (rule.includes('syntax')) {
+            explanation += '\n💡 Проверьте: структуру блоков, закрывающие скобки, правильность отступов';
+        } else if (rule.includes('indentation')) {
+            explanation += '\n💡 Исправьте отступы: используйте только пробелы (не табы), проверьте количество пробелов';
+        } else if (rule.includes('line-length') || rule.includes('line too long')) {
+            explanation += '\n💡 Сократите строку до 150 символов или разбейте на несколько строк';
+        } else if (rule.includes('trailing-spaces') || rule.includes('trailing-whitespace')) {
+            explanation += '\n💡 Удалите пробелы в конце строки';
+        } else if (rule.includes('name[missing]')) {
+            explanation += '\n💡 Добавьте параметр "name:" к задаче для лучшей читаемости';
+        } else if (rule.includes('name[casing]')) {
+            explanation += '\n💡 Имя задачи должно начинаться с заглавной буквы';
+        } else if (rule.includes('yaml[truthy]')) {
+            explanation += '\n💡 Используйте true/false или yes/no вместо других вариантов';
+        } else if (rule.includes('end-of-file')) {
+            explanation += '\n💡 Добавьте пустую строку в конце файла';
+        } else if (rule.includes('check-yaml')) {
+            explanation += '\n💡 Исправьте структуру YAML файла - проверьте отступы и синтаксис';
+        } else if (rule.includes('jinja')) {
+            explanation += '\n💡 Проверьте синтаксис Jinja2 шаблонов ({{ }}, {% %})';
+        } else if (rule.includes('no-changed-when')) {
+            explanation += '\n💡 Добавьте "changed_when:" для команд, которые не изменяют состояние';
+        } else if (rule.includes('risky-file-permissions')) {
+            explanation += '\n💡 Укажите явные права доступа (mode: "0644") для файлов и директорий';
         }
+
+        return explanation;
     }
 
     /**
