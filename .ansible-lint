@@ -1,9 +1,7 @@
 ﻿---
 # Ansible-lint configuration with Ansible project structure validation
+# Note: Line length (150 chars) is configured in .yamllint file
 profile: production
-
-# Maximum line length (150 characters)
-max_line_length: 150
 
 # Excluded paths
 exclude_paths:
