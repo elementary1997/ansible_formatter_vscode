@@ -1,0 +1,181 @@
+{
+  "name": "ansible-lint-helper",
+  "displayName": "Ansible Lint Helper",
+  "description": "Run yamllint, pre-commit and ansible-lint with inline errors and auto-fix support",
+  "version": "1.0.4",
+  "publisher": "elementary1997",
+  "author": {
+    "name": "elementary1997"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elementary1997/ansible_formatter_vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/elementary1997/ansible_formatter_vscode/issues"
+  },
+  "homepage": "https://github.com/elementary1997/ansible_formatter_vscode#readme",
+  "keywords": [
+    "ansible",
+    "yaml",
+    "lint",
+    "linter",
+    "ansible-lint",
+    "yamllint",
+    "pre-commit",
+    "formatter",
+    "ansible playbook",
+    "devops",
+    "automation"
+  ],
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Linters",
+    "Formatters",
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:yaml",
+    "onLanguage:ansible",
+    "onCommand:ansible-lint.run",
+    "onCommand:ansible-lint.runAll",
+    "onCommand:ansible-lint.runPreCommit",
+    "onCommand:ansible-lint.fixCurrent"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ansible-lint.run",
+        "title": "Ansible Lint: Run on Current File"
+      },
+      {
+        "command": "ansible-lint.runAll",
+        "title": "Ansible Lint: Run on All Files"
+      },
+      {
+        "command": "ansible-lint.runPreCommit",
+        "title": "Ansible Lint: Run pre-commit"
+      },
+      {
+        "command": "ansible-lint.fixCurrent",
+        "title": "Ansible Lint: Fix Current File"
+      },
+      {
+        "command": "ansible-lint.fixWithTool",
+        "title": "Ansible Lint: Fix with ansible-lint --fix"
+      },
+      {
+        "command": "ansible-lint.ignoreRule",
+        "title": "Ansible Lint: Ignore Rule"
+      },
+      {
+        "command": "ansible-lint.clearCache",
+        "title": "Ansible Lint: Clear Cache"
+      },
+      {
+        "command": "ansible-lint.openSettings",
+        "title": "Ansible Lint: Open Settings"
+      }
+    ],
+    "configuration": {
+      "title": "Ansible Lint Helper",
+      "properties": {
+        "ansible-lint.executablePath": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to ansible-lint executable (leave empty for auto-detection)"
+        },
+        "ansible-lint.preCommitExecutable": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to pre-commit executable (leave empty for auto-detection)"
+        },
+        "ansible-lint.yamllintExecutable": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to yamllint executable (leave empty for auto-detection)"
+        },
+        "ansible-lint.autoFixOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically fix issues when saving files"
+        },
+        "ansible-lint.enableYamllint": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable yamllint checks"
+        },
+        "ansible-lint.enablePreCommit": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable pre-commit checks"
+        },
+        "ansible-lint.enableAnsibleLint": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable ansible-lint checks"
+        },
+        "ansible-lint.useCache": {
+          "type": "boolean",
+          "default": true,
+          "description": "Cache linting results for unchanged files"
+        },
+        "ansible-lint.lineLength": {
+          "type": "number",
+          "default": 150,
+          "minimum": 80,
+          "maximum": 500,
+          "description": "Maximum line length for yamllint"
+        },
+        "ansible-lint.indentSpaces": {
+          "type": "number",
+          "default": 2,
+          "enum": [2, 4],
+          "description": "Number of spaces for indentation"
+        },
+        "ansible-lint.uiScale": {
+          "type": "number",
+          "default": 100,
+          "minimum": 50,
+          "maximum": 150,
+          "description": "UI scale for error panel (50-150%)"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ansible-lint-explorer",
+          "title": "Ansible Lint",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "ansible-lint-explorer": [
+        {
+          "type": "webview",
+          "id": "ansibleLintHelper.resultsView",
+          "name": "Lint Results"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.60.0",
+    "@types/node": "^14.14.37",
+    "typescript": "^4.9.5",
+    "@vscode/vsce": "^2.22.0"
+  }
+}

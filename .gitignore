@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Build output
+out/
+dist/
+build/
+*.vsix
+
+# VS Code
+.vscode-test/
+
+# Ansible cache
+.ansible/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temp files
+.temp_*
+.temp_fix_*
+.temp_lint_*
+
+# Cache
+.cache/

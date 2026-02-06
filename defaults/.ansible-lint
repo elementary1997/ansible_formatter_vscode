@@ -1,0 +1,25 @@
+﻿---
+# Ansible-lint configuration with Ansible project structure validation
+# Note: Line length (150 chars) is configured in .yamllint file
+profile: production
+
+# Excluded paths
+exclude_paths:
+  - .cache/
+  - .github/
+  - .venv/
+  - venv/
+  - node_modules/
+  - out/
+  - test_extension/
+  - build/
+
+# Rules that will only warn
+warn_list:
+  - command-instead-of-module
+  - command-instead-of-shell
+  - no-changed-when
+  - risky-file-permissions
+
+# Strict mode for production
+strict: true
