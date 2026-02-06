@@ -14,7 +14,7 @@ repos:
     hooks:
       - id: yamllint
         name: Yaml validate with yamllint
-        args: [-c=../.yamllint.yml, --strict]
+        args: [-c=.yamllint.yml, --strict]
 
   - repo: https://github.com/ansible/ansible-lint
     rev: v6.22.2
