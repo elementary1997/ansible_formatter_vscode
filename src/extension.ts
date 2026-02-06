@@ -127,6 +127,31 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    // Отслеживаем изменения в .ansible-lint для автообновления ошибок
+    const ansibleLintWatcher = vscode.workspace.createFileSystemWatcher('**/.ansible-lint');
+    context.subscriptions.push(
+        ansibleLintWatcher.onDidChange(async () => {
+            console.log('[Extension] .ansible-lint changed, re-running checks...');
+            // Небольшая задержка чтобы файл успел сохраниться
+            setTimeout(async () => {
+                await runAnsibleLintOnCurrentFile();
+            }, 500);
+        })
+    );
+    context.subscriptions.push(ansibleLintWatcher);
+
+    // Отслеживаем изменения в .yamllint для автообновления
+    const yamllintWatcher = vscode.workspace.createFileSystemWatcher('**/.yamllint');
+    context.subscriptions.push(
+        yamllintWatcher.onDidChange(async () => {
+            console.log('[Extension] .yamllint changed, re-running checks...');
+            setTimeout(async () => {
+                await runAnsibleLintOnCurrentFile();
+            }, 500);
+        })
+    );
+    context.subscriptions.push(yamllintWatcher);
+
     context.subscriptions.push(diagnosticsProvider);
 }
 
