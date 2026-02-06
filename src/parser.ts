@@ -222,8 +222,22 @@ export class Parser {
             const fixingMatch = line.match(/^Fixing\s+(.+)$/);
             if (fixingMatch && currentHookId) {
                 const file = fixingMatch[1].trim();
-                let filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
-                filePath = path.resolve(filePath);
+
+                // Строим полный путь - используем path.resolve для правильной обработки относительных путей
+                let filePath: string;
+                if (path.isAbsolute(file)) {
+                    filePath = file;
+                } else {
+                    const workspaceBasename = path.basename(workspaceRoot);
+                    const fileSegments = file.split(path.sep);
+
+                    if (fileSegments[0] === workspaceBasename) {
+                        filePath = path.resolve(path.dirname(workspaceRoot), file);
+                    } else {
+                        filePath = path.resolve(workspaceRoot, file);
+                    }
+                }
+
                 console.log(`[Parser] Pre-commit fixing: file="${file}", resolved="${filePath}"`);
 
                 let message = 'File modified';
@@ -255,10 +269,24 @@ export class Parser {
             const locationMatch = line.match(/in\s+"([^"]+)",\s+line\s+(\d+)(?:,\s+column\s+(\d+))?/);
             if (locationMatch && currentHookId) {
                 const [, file, lineNum, col] = locationMatch;
-                // Строим полный путь
-                let filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
-                // Нормализуем путь (убираем ../, ./, повторные слеши)
-                filePath = path.resolve(filePath);
+
+                // Строим полный путь - используем path.resolve для правильной обработки относительных путей
+                let filePath: string;
+                if (path.isAbsolute(file)) {
+                    filePath = file;
+                } else {
+                    // Проверяем, не начинается ли file с последнего сегмента workspaceRoot (избегаем дублирования)
+                    const workspaceBasename = path.basename(workspaceRoot);
+                    const fileSegments = file.split(path.sep);
+
+                    if (fileSegments[0] === workspaceBasename) {
+                        // file уже содержит имя workspace, берем путь от родителя
+                        filePath = path.resolve(path.dirname(workspaceRoot), file);
+                    } else {
+                        // Стандартный случай - относительный путь от workspace root
+                        filePath = path.resolve(workspaceRoot, file);
+                    }
+                }
 
                 console.log(`[Parser] Pre-commit location: file="${file}", workspaceRoot="${workspaceRoot}", resolved="${filePath}"`);
 
@@ -287,8 +315,22 @@ export class Parser {
             const fileMessageMatch = line.match(/^([^\s:]+\.(yml|yaml|ts|js|md|json|py)):\s*(.+)$/);
             if (fileMessageMatch && currentHookId) {
                 const [, file, , message] = fileMessageMatch;
-                let filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
-                filePath = path.resolve(filePath);
+
+                // Строим полный путь - используем path.resolve для правильной обработки относительных путей
+                let filePath: string;
+                if (path.isAbsolute(file)) {
+                    filePath = file;
+                } else {
+                    const workspaceBasename = path.basename(workspaceRoot);
+                    const fileSegments = file.split(path.sep);
+
+                    if (fileSegments[0] === workspaceBasename) {
+                        filePath = path.resolve(path.dirname(workspaceRoot), file);
+                    } else {
+                        filePath = path.resolve(workspaceRoot, file);
+                    }
+                }
+
                 console.log(`[Parser] Pre-commit file message: file="${file}", resolved="${filePath}"`);
 
                 errors.push({
