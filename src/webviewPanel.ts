@@ -222,13 +222,22 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             padding: 1px 0;
         }
 
-        .lang-icon {
+        .lang-badge {
             flex-shrink: 0;
-            font-size: 0.9em;
+            font-size: 0.65em;
+            font-weight: bold;
+            padding: 1px 4px;
+            border-radius: 3px;
         }
 
-        .error-text {
-            color: var(--vscode-foreground);
+        .lang-badge.eng {
+            background: #2563eb;
+            color: #fff;
+        }
+
+        .lang-badge.ru {
+            background: #dc2626;
+            color: #fff;
         }
 
         .error-group {
@@ -515,6 +524,10 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             <button onclick="fixFile()" title="Fix current file">Fix File</button>
             <button onclick="fixAll()" title="Fix all files">Fix All</button>
             <button onclick="openSettings()" title="Open Settings" class="settings-btn">⚙️</button>
+            <div class="lang-switcher">
+                <button class="lang-btn" id="lang-en" onclick="setLang('en')" title="English">🇬🇧</button>
+                <button class="lang-btn active" id="lang-ru" onclick="setLang('ru')" title="Русский">🇷🇺</button>
+            </div>
         </div>
     </div>
 
@@ -658,15 +671,8 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                             <span class="error-location-inline">Line \${error.line}\${error.column ? ':' + error.column : ''}</span>
                         </div>
                         <div class="error-messages" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                            <div class="error-lang-line">
-                                <span class="lang-icon">🇬🇧</span>
-                                <span class="error-text">\${escapeHtml(error.message)}</span>
-                            </div>
-                            \${error.detailedExplanation && error.detailedExplanation !== error.message ? \`
-                            <div class="error-lang-line">
-                                <span class="lang-icon">🇷🇺</span>
-                                <span class="error-text">\${escapeHtml(error.detailedExplanation)}</span>
-                            </div>\` : ''}
+                            <div class="error-lang-line"><span class="lang-badge eng">ENG</span> \${escapeHtml(error.message)}</div>
+                            \${error.detailedExplanation && error.detailedExplanation !== error.message ? '<div class="error-lang-line"><span class="lang-badge ru">RU</span> ' + escapeHtml(error.detailedExplanation) + '</div>' : ''}
                         </div>
                         <div class="error-actions">
                             \${error.fixable ? '<span class="fixable-badge">🔧 Auto-fixable</span>' : ''}
