@@ -3,6 +3,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import { Executor } from './executor';
 import { Parser } from './parser';
 import { DiagnosticsProvider } from './diagnosticsProvider';
@@ -11,12 +12,14 @@ import { WebviewPanel } from './webviewPanel';
 import { AnsibleLintFixer } from './ansibleLintFixer';
 import { QuickFixer } from './quickFixer';
 import { LintError } from './models/lintError';
+import { LintCache } from './cache';
 
 let diagnosticsProvider: DiagnosticsProvider;
 let webviewPanel: WebviewPanel;
 let statusBarItem: vscode.StatusBarItem;
 let extensionContext: vscode.ExtensionContext;
 let lastCheckType: 'file' | 'all' = 'file'; // Отслеживаем последний тип проверки
+let lintCache: LintCache;
 
 // Экспортируем функцию для получения последнего типа проверки
 export function getLastCheckType(): 'file' | 'all' {
@@ -28,6 +31,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Сохраняем контекст для доступа к workspaceState
     extensionContext = context;
+
+    // Инициализация кэша
+    lintCache = LintCache.getInstance();
+    lintCache.initialize(context);
 
     // Инициализация провайдеров
     diagnosticsProvider = new DiagnosticsProvider();
@@ -110,10 +117,24 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('ansible-lint.ignoreRule', ignoreRule)
     );
 
+    context.subscriptions.push(
+        vscode.commands.registerCommand('ansible-lint.clearCache', () => {
+            lintCache.clear();
+            vscode.window.showInformationMessage('🗑️ Lint cache cleared');
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('ansible-lint.openSettings', () => {
+            vscode.commands.executeCommand('workbench.action.openSettings', 'ansible-lint');
+        })
+    );
+
     // Подписка на события webview панели
     context.subscriptions.push(
         webviewPanel.onDidClear(() => {
             diagnosticsProvider.clear();
+            lintCache.clear();
             clearSavedState();
         })
     );
@@ -159,6 +180,22 @@ async function runAnsibleLintOnCurrentFile(): Promise<void> {
     }
 
     const workspaceRoot = workspaceFolder.uri.fsPath;
+    const fileContent = document.getText();
+
+    // Проверяем кэш
+    const config = vscode.workspace.getConfiguration('ansible-lint');
+    const useCache = config.get<boolean>('useCache', true);
+
+    if (useCache && lintCache.hasValidCache(filePath, fileContent)) {
+        const cachedErrors = lintCache.getCachedErrors(filePath);
+        if (cachedErrors) {
+            console.log('[Extension] Using cached results for', filePath);
+            diagnosticsProvider.updateDiagnostics(cachedErrors);
+            webviewPanel.updateErrors(cachedErrors);
+            vscode.window.showInformationMessage('📦 Using cached results (file unchanged)');
+            return;
+        }
+    }
 
     try {
         await vscode.window.withProgress({
@@ -169,7 +206,6 @@ async function runAnsibleLintOnCurrentFile(): Promise<void> {
             const allErrors: any[] = [];
 
             // Получаем настройки линтеров
-            const config = vscode.workspace.getConfiguration('ansible-lint');
             const enableYamllint = config.get<boolean>('enableYamllint', true);
             const enablePreCommit = config.get<boolean>('enablePreCommit', true);
             const enableAnsibleLint = config.get<boolean>('enableAnsibleLint', true);
@@ -243,6 +279,9 @@ async function runAnsibleLintOnCurrentFile(): Promise<void> {
             // Обновляем UI
             diagnosticsProvider.updateDiagnostics(allErrors);
             webviewPanel.updateErrors(allErrors);
+
+            // Сохраняем в кэш
+            lintCache.setCacheEntry(filePath, fileContent, allErrors);
 
             // Сохраняем состояние для восстановления после перезапуска
             saveState(allErrors);
@@ -482,6 +521,9 @@ async function fixCurrentFile(): Promise<void> {
             // Шаг 2: Применяем ansible-lint --fix
             await AnsibleLintFixer.fixFile(document);
 
+            // Инвалидируем кэш для исправленного файла
+            lintCache.invalidate(document.uri.fsPath);
+
             progress.report({ increment: 100 });
         });
 
@@ -529,6 +571,9 @@ async function fixAllFiles(): Promise<void> {
             } catch (error: any) {
                 console.log('[Extension] ansible-lint --fix completed with warnings:', error.message);
             }
+
+            // Очищаем кэш после fix all (все файлы могли измениться)
+            lintCache.clear();
 
             progress.report({ increment: 80, message: 'Refreshing...' });
 

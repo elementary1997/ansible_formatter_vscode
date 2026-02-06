@@ -2,6 +2,32 @@
 
 All notable changes to the "Ansible Lint Helper" extension will be documented in this file.
 
+## [1.0.3] - 2026-02-06
+
+### New Features
+
+#### 📦 Smart Caching
+- **File content caching** - results are cached based on file hash (MD5)
+- **Skips unchanged files** - if file wasn't modified, uses cached results
+- **"Using cached results"** notification when cache is used
+- **Clear Cache** command to force re-check all files
+- **Cache auto-invalidation** after Fix operations
+
+#### ⚙️ GUI Settings
+- **Settings button (⚙️)** in the panel - opens VSCode settings filtered to ansible-lint
+- New configurable options:
+  - `ansible-lint.useCache` (default: true) - enable/disable caching
+  - `ansible-lint.lineLength` (default: 150) - max line length for yamllint
+  - `ansible-lint.indentSpaces` (default: 2) - indentation spaces (2 or 4)
+- Settings are applied automatically when no workspace config exists
+- Workspace config files (`.yamllint`, `.ansible-lint`) take priority over VSCode settings
+
+#### 🛠️ New Commands
+- `Ansible Lint: Clear Cache` - clear all cached linting results
+- `Ansible Lint: Open Settings` - quick access to extension settings
+
+---
+
 ## [1.0.2] - 2026-02-06
 
 ### New Features

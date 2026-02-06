@@ -353,6 +353,19 @@ export class Executor {
     }
 
     /**
+     * Сгенерировать inline конфигурацию для yamllint на основе настроек VSCode
+     */
+    private static getYamllintInlineConfig(): string {
+        const config = vscode.workspace.getConfiguration('ansible-lint');
+        const lineLength = config.get<number>('lineLength', 150);
+        const indentSpaces = config.get<number>('indentSpaces', 2);
+
+        // Создаём inline YAML конфигурацию
+        const inlineConfig = `{extends: default, rules: {line-length: {max: ${lineLength}}, indentation: {spaces: ${indentSpaces}}, truthy: disable}}`;
+        return inlineConfig;
+    }
+
+    /**
      * Запуск yamllint на файле
      */
     public static async runYamllint(
@@ -363,9 +376,17 @@ export class Executor {
         const yamllintPath = this.getYamllintPath(workspaceRoot);
         const relativePath = path.relative(workspaceRoot, filePath);
 
-        // Проверяем наличие конфига yamllint
-        const defaultConfigPath = this.ensureConfig(workspaceRoot, 'yamllint');
-        const configArg = defaultConfigPath ? `-c "${defaultConfigPath}"` : '';
+        // Проверяем наличие конфига yamllint в workspace
+        let configArg = '';
+        if (this.hasConfig(workspaceRoot, 'yamllint') || this.hasConfig(workspaceRoot, '.yamllint')) {
+            // Если есть конфиг в workspace - используем его (yamllint сам найдёт)
+            console.log('[Executor] Using workspace yamllint config');
+        } else {
+            // Если нет - используем inline конфигурацию из настроек VSCode
+            const inlineConfig = this.getYamllintInlineConfig();
+            configArg = `-d "${inlineConfig}"`;
+            console.log('[Executor] Using inline yamllint config from VSCode settings');
+        }
 
         const command = `"${yamllintPath}" ${configArg} -f parsable "${relativePath}"`;
 
@@ -392,9 +413,17 @@ export class Executor {
         const startTime = Date.now();
         const yamllintPath = this.getYamllintPath(workspaceRoot);
 
-        // Проверяем наличие конфига yamllint
-        const defaultConfigPath = this.ensureConfig(workspaceRoot, 'yamllint');
-        const configArg = defaultConfigPath ? `-c "${defaultConfigPath}"` : '';
+        // Проверяем наличие конфига yamllint в workspace
+        let configArg = '';
+        if (this.hasConfig(workspaceRoot, 'yamllint') || this.hasConfig(workspaceRoot, '.yamllint')) {
+            // Если есть конфиг в workspace - используем его
+            console.log('[Executor] Using workspace yamllint config');
+        } else {
+            // Если нет - используем inline конфигурацию из настроек VSCode
+            const inlineConfig = this.getYamllintInlineConfig();
+            configArg = `-d "${inlineConfig}"`;
+            console.log('[Executor] Using inline yamllint config from VSCode settings');
+        }
 
         const command = `"${yamllintPath}" ${configArg} -f parsable .`;
 

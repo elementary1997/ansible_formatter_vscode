@@ -2,7 +2,7 @@
   "name": "ansible-lint-helper",
   "displayName": "Ansible Lint Helper",
   "description": "Run yamllint, pre-commit and ansible-lint with inline errors and auto-fix support",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "elementary1997",
   "author": {
     "name": "elementary1997"
@@ -71,6 +71,14 @@
       {
         "command": "ansible-lint.ignoreRule",
         "title": "Ansible Lint: Ignore Rule"
+      },
+      {
+        "command": "ansible-lint.clearCache",
+        "title": "Ansible Lint: Clear Cache"
+      },
+      {
+        "command": "ansible-lint.openSettings",
+        "title": "Ansible Lint: Open Settings"
       }
     ],
     "configuration": {
@@ -110,6 +118,24 @@
           "type": "boolean",
           "default": true,
           "description": "Enable ansible-lint checks"
+        },
+        "ansible-lint.useCache": {
+          "type": "boolean",
+          "default": true,
+          "description": "Cache linting results for unchanged files"
+        },
+        "ansible-lint.lineLength": {
+          "type": "number",
+          "default": 150,
+          "minimum": 80,
+          "maximum": 500,
+          "description": "Maximum line length for yamllint"
+        },
+        "ansible-lint.indentSpaces": {
+          "type": "number",
+          "default": 2,
+          "enum": [2, 4],
+          "description": "Number of spaces for indentation"
         }
       }
     },

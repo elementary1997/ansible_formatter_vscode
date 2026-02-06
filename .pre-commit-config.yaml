@@ -12,27 +12,27 @@ repos:
       # Remove trailing whitespace
       - id: trailing-whitespace
         args: ['--markdown-linebreak-ext=md']
-      
+
       # Ensure files end with newline
       - id: end-of-file-fixer
-      
+
       # Check YAML syntax (basic check, yamllint provides detailed checks)
       - id: check-yaml
         args: ['--unsafe']  # Allow custom tags for Ansible
-      
+
       # Prevent large files from being committed
       - id: check-added-large-files
         args: ['--maxkb=1000']
-      
+
       # Ensure consistent line endings
       - id: mixed-line-ending
         args: ['--fix=lf']  # Force LF (Unix) line endings
-      
+
       # Check for merge conflict markers
       - id: check-merge-conflict
-      
+
       # Check for files that would conflict on case-insensitive filesystems
       - id: check-case-conflict
-      
+
       # Check for debug statements
       - id: debug-statements

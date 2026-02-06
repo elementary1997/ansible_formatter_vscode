@@ -74,6 +74,12 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                     this.clear();
                     this._onDidClear.fire();
                     break;
+                case 'openSettings':
+                    vscode.commands.executeCommand('ansible-lint.openSettings');
+                    break;
+                case 'clearCache':
+                    vscode.commands.executeCommand('ansible-lint.clearCache');
+                    break;
             }
         });
     }
@@ -195,6 +201,16 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
 
         button:hover {
             background: var(--vscode-button-hoverBackground);
+        }
+
+        .settings-btn {
+            padding: 5px 8px;
+            background: transparent;
+            border: 1px solid var(--vscode-button-background);
+        }
+
+        .settings-btn:hover {
+            background: var(--vscode-button-background);
         }
 
         .error-group {
@@ -440,6 +456,7 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             <button onclick="runAll()" title="Check entire workspace">Check All</button>
             <button onclick="fixFile()" title="Fix current file">Fix File</button>
             <button onclick="fixAll()" title="Fix all files">Fix All</button>
+            <button onclick="openSettings()" title="Open Settings" class="settings-btn">⚙️</button>
         </div>
     </div>
 
@@ -716,6 +733,18 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         function clear() {
             vscode.postMessage({
                 type: 'clear'
+            });
+        }
+
+        function openSettings() {
+            vscode.postMessage({
+                type: 'openSettings'
+            });
+        }
+
+        function clearCache() {
+            vscode.postMessage({
+                type: 'clearCache'
             });
         }
 

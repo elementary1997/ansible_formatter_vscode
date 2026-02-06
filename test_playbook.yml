@@ -1,16 +1,16 @@
 ---
-- hosts: all  
+- hosts: all
   become: yes
   tasks:
   - apt:
       name: nginx
       state: present
-  - name: Start nginx   
+  - name: Start nginx
     service:
       name: nginx
       state: started
-      
-      
+
+
   - copy:
       src: /tmp/test
       dest: /tmp/test2
