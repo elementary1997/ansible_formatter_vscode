@@ -654,7 +654,7 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             document.getElementById('filter-warning').textContent = '⚠️ Warnings (' + warningCount + ')';
             document.getElementById('filter-info').textContent = 'ℹ️ Info (' + infoCount + ')';
 
-            stats.textContent = \`\${errorCount} errors, \${warningCount} warnings\`;
+            stats.innerHTML = \`❌ \${errorCount} &nbsp; ⚠️ \${warningCount} &nbsp; ℹ️ \${infoCount}\`;
 
             // Применяем фильтр
             const filteredErrors = filterErrors(errors);
