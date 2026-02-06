@@ -391,7 +391,7 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
 
         .error-source {
             font-size: 0.75em;
-            color: var(--vscode-descriptionForeground);
+            color: var(--vscode-badge-foreground);
             background: var(--vscode-badge-background);
             padding: 2px 6px;
             border-radius: 3px;
