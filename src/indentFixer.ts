@@ -7,6 +7,59 @@ import * as os from 'os';
 export class IndentFixer {
 
     /**
+     * Ищет исполняемый файл в стандартных локациях
+     * Возвращает полный путь или имя команды если найдена в PATH
+     */
+    private static findExecutable(commandName: string, workspaceRoot?: string): string {
+        const isWindows = process.platform === 'win32';
+        const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+        
+        // Список мест где искать (в порядке приоритета)
+        const searchPaths: string[] = [];
+        
+        // 1. venv в workspace
+        if (workspaceRoot) {
+            searchPaths.push(path.join(workspaceRoot, 'venv', 'bin', commandName));
+            searchPaths.push(path.join(workspaceRoot, '..', 'venv', 'bin', commandName));
+            searchPaths.push(path.join(workspaceRoot, '.venv', 'bin', commandName));
+        }
+        
+        // 2. ~/.local/bin (pip install --user)
+        if (homeDir) {
+            searchPaths.push(path.join(homeDir, '.local', 'bin', commandName));
+        }
+        
+        // 3. Стандартные системные пути
+        if (!isWindows) {
+            searchPaths.push(`/usr/local/bin/${commandName}`);
+            searchPaths.push(`/usr/bin/${commandName}`);
+            searchPaths.push(`/bin/${commandName}`);
+        }
+        
+        // 4. pipx
+        if (homeDir) {
+            searchPaths.push(path.join(homeDir, '.local', 'pipx', 'venvs', commandName, 'bin', commandName));
+        }
+        
+        // Ищем первый существующий файл
+        for (const fullPath of searchPaths) {
+            if (fs.existsSync(fullPath)) {
+                try {
+                    fs.accessSync(fullPath, fs.constants.X_OK);
+                    console.log(`[IndentFixer] Found ${commandName} at: ${fullPath}`);
+                    return fullPath;
+                } catch (e) {
+                    // Не исполняемый файл, продолжаем поиск
+                }
+            }
+        }
+        
+        // Fallback: возвращаем имя команды (может быть в PATH)
+        console.log(`[IndentFixer] ${commandName} not found in standard locations, using command name`);
+        return commandName;
+    }
+
+    /**
      * Run linters on fixed text and return diagnostics
      */
     public static async runLintersOnText(text: string, fileName: string, workspaceRoot: string): Promise<string[]> {
@@ -19,7 +72,8 @@ export class IndentFixer {
         try {
             // Check yamllint
             try {
-                const yamllintOutput = await this.runCommand(`yamllint -f parsable "${tempFileName}"`, workspaceRoot);
+                const yamllintCmd = this.findExecutable('yamllint', workspaceRoot);
+                const yamllintOutput = await this.runCommand(`"${yamllintCmd}" -f parsable "${tempFileName}"`, workspaceRoot);
                 if (yamllintOutput && yamllintOutput.length > 0) {
                     const formattedOutput = this.formatYamllintOutput(yamllintOutput, tempFileName);
                     diagnostics.push(`📋 yamllint:\n${formattedOutput}`);
@@ -34,7 +88,8 @@ export class IndentFixer {
 
             // Check ansible-lint
             try {
-                const ansibleLintOutput = await this.runCommand(`ansible-lint -f pep8 "${tempFileName}"`, workspaceRoot);
+                const ansibleLintCmd = this.findExecutable('ansible-lint', workspaceRoot);
+                const ansibleLintOutput = await this.runCommand(`"${ansibleLintCmd}" -f pep8 "${tempFileName}"`, workspaceRoot);
                 if (ansibleLintOutput && ansibleLintOutput.length > 0) {
                     const formattedOutput = this.formatAnsibleLintOutput(ansibleLintOutput, tempFileName);
                     diagnostics.push(`🔍 ansible-lint:\n${formattedOutput}`);
@@ -83,7 +138,8 @@ export class IndentFixer {
             
             // Always try yamllint if config exists OR just try it
             try {
-                const yamllintOutput = await this.runCommand(`yamllint -f parsable "${tempFileName}"`, rootPath);
+                const yamllintCmd = this.findExecutable('yamllint', rootPath);
+                const yamllintOutput = await this.runCommand(`"${yamllintCmd}" -f parsable "${tempFileName}"`, rootPath);
                 if (yamllintOutput && yamllintOutput.length > 0) {
                     // Format yamllint output for better readability
                     const formattedOutput = this.formatYamllintOutput(yamllintOutput, tempFileName);
@@ -106,7 +162,8 @@ export class IndentFixer {
                 console.log(`[IndentFixer] ansible-lint config found: ${hasAnsibleLintConfig}`);
                 
                 try {
-                    const ansibleLintOutput = await this.runCommand(`ansible-lint -f pep8 "${tempFileName}"`, rootPath);
+                    const ansibleLintCmd = this.findExecutable('ansible-lint', rootPath);
+                    const ansibleLintOutput = await this.runCommand(`"${ansibleLintCmd}" -f pep8 "${tempFileName}"`, rootPath);
                     if (ansibleLintOutput && ansibleLintOutput.length > 0) {
                         // Format ansible-lint output
                         const formattedOutput = this.formatAnsibleLintOutput(ansibleLintOutput, tempFileName);
@@ -334,10 +391,12 @@ export class IndentFixer {
         };
 
         try {
+            const ansibleLintCmd = this.findExecutable('ansible-lint', rootPath);
+            
             await new Promise<void>((resolve, reject) => {
-                const cmd = `ansible-lint --fix "${tempFileName}"`;
+                const cmd = `"${ansibleLintCmd}" --fix "${tempFileName}"`;
                 console.log(`[IndentFixer] Running: ${cmd}`);
-                console.log(`[IndentFixer] PATH: ${env.PATH}`);
+                console.log(`[IndentFixer] Using ansible-lint: ${ansibleLintCmd}`);
                 
                 cp.exec(cmd, { cwd: rootPath, timeout: 30000, env }, (error, stdout, stderr) => {
                     console.log(`[IndentFixer] ansible-lint stdout:`, stdout);
@@ -404,11 +463,13 @@ export class IndentFixer {
         };
 
         try {
+            const preCommitCmd = this.findExecutable('pre-commit', rootPath);
+            
             // Run pre-commit
             console.log(`[IndentFixer] Running: pre-commit run --files "${tempFileName}" in ${rootPath}`);
-            console.log(`[IndentFixer] PATH: ${env.PATH}`);
+            console.log(`[IndentFixer] Using pre-commit: ${preCommitCmd}`);
             const result = await new Promise<{code: number, stdout: string, stderr: string}>((resolve, reject) => {
-                cp.exec(`pre-commit run --files "${tempFileName}"`, { cwd: rootPath, timeout: 30000, env }, (error, stdout, stderr) => {
+                cp.exec(`"${preCommitCmd}" run --files "${tempFileName}"`, { cwd: rootPath, timeout: 30000, env }, (error, stdout, stderr) => {
                     const exitCode = error ? error.code || 0 : 0;
                     console.log(`[IndentFixer] pre-commit stdout:`, stdout);
                     console.log(`[IndentFixer] pre-commit stderr:`, stderr);
