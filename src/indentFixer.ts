@@ -360,8 +360,8 @@ export class IndentFixer {
     }
 
     /**
-     * Улучшенный алгоритм исправления отступов для YAML/Ansible.
-     * Использует стек контекста для правильного определения уровня вложенности.
+     * ПРАВИЛЬНЫЙ алгоритм исправления отступов для YAML/Ansible.
+     * Парсит структуру и правильно расставляет отступы по стандартам Ansible.
      */
     public static fixText(text: string): string {
         const lines = text.split(/\r?\n/);
@@ -371,114 +371,152 @@ export class IndentFixer {
             return text;
         }
 
-        // Стек для отслеживания контекста: [{indent: number, type: 'key'|'list'|'value'}]
-        const contextStack: Array<{indent: number, endsWithColon: boolean, isListItem: boolean}> = [];
-        
-        // Первая строка - якорь
-        const firstLine = lines[0];
-        const firstIndent = (firstLine.match(/^(\s*)/) || ['', ''])[1].length;
-        fixedLines.push(firstLine);
-        
-        const trimmedFirst = firstLine.trim();
-        if (trimmedFirst && !trimmedFirst.startsWith('#')) {
-            contextStack.push({
-                indent: firstIndent,
-                endsWithColon: trimmedFirst.endsWith(':'),
-                isListItem: trimmedFirst.startsWith('-')
-            });
-        }
+        // Правила YAML/Ansible:
+        // 1. Ключи на одном уровне - одинаковый отступ
+        // 2. После "key:" дети получают +2 пробела
+        // 3. После "- item" (list) дети получают +2 пробела
+        // 4. Если "- key: value" то следующие ключи получают +2 от '-'
 
-        for (let i = 1; i < lines.length; i++) {
+        let indentLevel = 0; // Текущий уровень отступа в пробелах
+        let prevLineType: 'playbook-start' | 'list-item' | 'key-with-colon' | 'key-value' | 'empty' = 'empty';
+        let prevIndent = 0;
+        let inListContext = false; // Находимся ли внутри списка задач
+        let listItemBaseIndent = 0; // Базовый отступ для list items
+
+        for (let i = 0; i < lines.length; i++) {
             const rawLine = lines[i];
             const trimmed = rawLine.trim();
 
-            // Пустые строки и комментарии сохраняем как есть
+            // Пустые строки
             if (trimmed === '') {
                 fixedLines.push('');
+                prevLineType = 'empty';
                 continue;
             }
 
+            // Комментарии - сохраняем с текущим уровнем
             if (trimmed.startsWith('#')) {
-                // Комментарии выравниваем по последнему контексту
-                const lastIndent = contextStack.length > 0 ? contextStack[contextStack.length - 1].indent : 0;
-                fixedLines.push(' '.repeat(lastIndent) + trimmed);
+                fixedLines.push(' '.repeat(indentLevel) + trimmed);
                 continue;
             }
 
-            // Определяем текущую строку
-            const currentIsListItem = trimmed.startsWith('-');
-            const currentEndsWithColon = trimmed.endsWith(':');
+            // Определяем тип строки
+            const isListItem = trimmed.startsWith('- ');
+            const endsWithColon = trimmed.endsWith(':');
+            const isKeyValue = trimmed.includes(':') && !endsWithColon;
             const currentRawIndent = (rawLine.match(/^(\s*)/) || ['', ''])[1].length;
 
-            // Вычисляем правильный отступ
-            let expectedIndent = 0;
+            // ЛОГИКА ОПРЕДЕЛЕНИЯ ОТСТУПА
+            let targetIndent = 0;
 
-            if (contextStack.length === 0) {
-                expectedIndent = 0;
-            } else {
-                const lastContext = contextStack[contextStack.length - 1];
+            // Первая строка (обычно ---)
+            if (i === 0) {
+                targetIndent = 0;
+                fixedLines.push(trimmed);
+                prevIndent = 0;
+                prevLineType = 'empty';
+                indentLevel = 0;
+                continue;
+            }
 
-                // Проверяем: это dedent (закрытие блока)?
-                // Если текущий отступ меньше предыдущего, ищем подходящий уровень в стеке
-                if (currentRawIndent < lastContext.indent) {
-                    // Уходим вверх по стеку
-                    while (contextStack.length > 0 && contextStack[contextStack.length - 1].indent >= currentRawIndent) {
-                        contextStack.pop();
+            // Специальная обработка для Ansible playbook structure
+            // Playbook начинается с "- name:" или "- hosts:"
+            if (isListItem && (trimmed.match(/^- name:/) || trimmed.match(/^- hosts:/))) {
+                // Это начало playbook entry - всегда отступ 0
+                targetIndent = 0;
+                inListContext = false;
+                listItemBaseIndent = 0;
+                indentLevel = 2; // Следующие ключи будут с отступом 2
+            }
+            // Обработка "tasks:", "vars:", "handlers:" и т.д.
+            else if (endsWithColon && !isListItem && prevLineType !== 'list-item') {
+                // Проверяем: это ключ на уровне playbook?
+                const isPlaybookKey = ['tasks', 'vars', 'handlers', 'pre_tasks', 'post_tasks', 'roles'].some(
+                    k => trimmed.startsWith(k + ':')
+                );
+                
+                if (isPlaybookKey && prevIndent === 2) {
+                    targetIndent = 2; // Ключи playbook на уровне 2
+                    if (trimmed.startsWith('tasks:')) {
+                        inListContext = true;
+                        listItemBaseIndent = 4; // list items в tasks начинаются с 4
                     }
-                    
-                    if (contextStack.length > 0) {
-                        const parentContext = contextStack[contextStack.length - 1];
-                        
-                        if (currentIsListItem) {
-                            // Новый list item на уровне родителя
-                            expectedIndent = parentContext.indent + (parentContext.endsWithColon ? 2 : 0);
-                        } else if (parentContext.isListItem) {
-                            // Ключ внутри list item
-                            expectedIndent = parentContext.indent + 2;
-                        } else if (parentContext.endsWithColon) {
-                            // Ребенок родителя с двоеточием
-                            expectedIndent = parentContext.indent + 2;
-                        } else {
-                            // Сиблинг
-                            expectedIndent = parentContext.indent;
-                        }
-                    } else {
-                        expectedIndent = 0;
-                    }
+                    indentLevel = 4; // Дети этого ключа будут на уровне 4
                 } else {
-                    // Продолжаем на текущем или следующем уровне
-                    if (lastContext.endsWithColon) {
-                        // Предыдущая строка открыла блок
-                        expectedIndent = lastContext.indent + 2;
-                    } else if (lastContext.isListItem && !currentIsListItem) {
-                        // Предыдущая была list item, текущая - ключ внутри
-                        expectedIndent = lastContext.indent + 2;
+                    // Обычный ключ - добавляем 2 к текущему уровню или остаемся на том же
+                    if (currentRawIndent < prevIndent) {
+                        // Dedent - возвращаемся на уровень выше
+                        targetIndent = Math.max(0, prevIndent - 2);
                     } else {
-                        // Сиблинг на том же уровне
-                        expectedIndent = lastContext.indent;
+                        targetIndent = prevIndent;
                     }
+                    indentLevel = targetIndent + 2;
+                }
+            }
+            // Обработка list items внутри tasks
+            else if (isListItem && inListContext) {
+                targetIndent = listItemBaseIndent;
+                indentLevel = listItemBaseIndent + 2; // Ключи внутри задачи на +2
+            }
+            // Обработка обычных list items
+            else if (isListItem) {
+                // Определяем уровень list item
+                if (prevLineType === 'key-with-colon') {
+                    targetIndent = prevIndent + 2;
+                } else {
+                    targetIndent = prevIndent;
+                }
+                indentLevel = targetIndent + 2;
+            }
+            // Ключи с двоеточием (модули типа "apt:", "copy:")
+            else if (endsWithColon) {
+                if (prevLineType === 'list-item') {
+                    // После "- name:" идет модуль - должен быть на +2 от '-'
+                    targetIndent = prevIndent + 2;
+                    indentLevel = targetIndent + 2; // Параметры модуля на +2
+                } else if (prevLineType === 'key-with-colon') {
+                    // Вложенный ключ
+                    targetIndent = prevIndent + 2;
+                    indentLevel = targetIndent + 2;
+                } else {
+                    targetIndent = indentLevel;
+                    indentLevel = targetIndent + 2;
+                }
+            }
+            // Простые ключи (параметры) 
+            else {
+                if (prevLineType === 'key-with-colon') {
+                    // После модуля с : идут параметры
+                    targetIndent = prevIndent + 2;
+                } else if (prevLineType === 'list-item') {
+                    // После list item
+                    targetIndent = prevIndent + 2;
+                } else {
+                    // Остаемся на текущем уровне
+                    targetIndent = indentLevel;
                 }
             }
 
-            // Нормализуем к кратности 2
-            expectedIndent = Math.round(expectedIndent / 2) * 2;
-            expectedIndent = Math.max(0, expectedIndent);
-
-            // Применяем
-            fixedLines.push(' '.repeat(expectedIndent) + trimmed);
-
-            // Обновляем стек
-            // Удаляем все контексты с тем же или большим отступом
-            while (contextStack.length > 0 && contextStack[contextStack.length - 1].indent >= expectedIndent) {
-                contextStack.pop();
+            // Проверка на dedent - если пользователь явно уменьшил отступ
+            if (currentRawIndent < prevIndent && !isListItem) {
+                // Dedent - корректируем уровень
+                targetIndent = Math.max(0, Math.floor(currentRawIndent / 2) * 2);
+                indentLevel = targetIndent;
+                inListContext = false;
             }
 
-            // Добавляем текущий контекст
-            contextStack.push({
-                indent: expectedIndent,
-                endsWithColon: currentEndsWithColon,
-                isListItem: currentIsListItem
-            });
+            // Применяем исправленный отступ
+            fixedLines.push(' '.repeat(targetIndent) + trimmed);
+
+            // Обновляем состояние
+            prevIndent = targetIndent;
+            if (isListItem) {
+                prevLineType = 'list-item';
+            } else if (endsWithColon) {
+                prevLineType = 'key-with-colon';
+            } else {
+                prevLineType = 'key-value';
+            }
         }
 
         return fixedLines.join('\n');
