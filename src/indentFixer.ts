@@ -79,23 +79,7 @@ export class IndentFixer {
         fs.writeFileSync(tempFilePath, text);
 
         try {
-            // Check yamllint
-            try {
-                const yamllintCmd = this.findExecutable('yamllint', workspaceRoot);
-                const yamllintOutput = await this.runCommand(`"${yamllintCmd}" -f parsable "${tempFileName}"`, workspaceRoot);
-                if (yamllintOutput && yamllintOutput.length > 0) {
-                    const formattedOutput = this.formatYamllintOutput(yamllintOutput, tempFileName);
-                    diagnostics.push(`📋 yamllint:\n${formattedOutput}`);
-                } else {
-                    diagnostics.push('✅ yamllint: Ошибок не найдено');
-                }
-            } catch (err: any) {
-                if (!err.message.includes('not found') && !err.message.includes('не является')) {
-                    diagnostics.push(`⚠️ yamllint: ${err.message}`);
-                }
-            }
-
-            // Check ansible-lint
+            // ONLY ansible-lint
             try {
                 const ansibleLintCmd = this.findExecutable('ansible-lint', workspaceRoot);
                 const ansibleLintOutput = await this.runCommand(`"${ansibleLintCmd}" -f pep8 "${tempFileName}"`, workspaceRoot);
@@ -139,56 +123,28 @@ export class IndentFixer {
         fs.writeFileSync(tempFilePath, document.getText());
 
         try {
-            // Check for yamllint
-            const hasYamllintConfig = fs.existsSync(path.join(rootPath, '.yamllint.yml')) || 
-                                     fs.existsSync(path.join(rootPath, '.yamllint'));
+            // ONLY ansible-lint - single source of truth for all checks
+            const hasAnsibleLintConfig = fs.existsSync(path.join(rootPath, '.ansible-lint'));
+            console.log(`[IndentFixer] ansible-lint config found: ${hasAnsibleLintConfig}`);
             
-            console.log(`[IndentFixer] yamllint config found: ${hasYamllintConfig}`);
-            
-            // Always try yamllint if config exists OR just try it
             try {
-                const yamllintCmd = this.findExecutable('yamllint', rootPath);
-                const yamllintOutput = await this.runCommand(`"${yamllintCmd}" -f parsable "${tempFileName}"`, rootPath);
-                if (yamllintOutput && yamllintOutput.length > 0) {
-                    // Format yamllint output for better readability
-                    const formattedOutput = this.formatYamllintOutput(yamllintOutput, tempFileName);
-                    diagnostics.push(`📋 yamllint:\n${formattedOutput}`);
+                const ansibleLintCmd = this.findExecutable('ansible-lint', rootPath);
+                const ansibleLintOutput = await this.runCommand(`"${ansibleLintCmd}" -f pep8 "${tempFileName}"`, rootPath);
+                if (ansibleLintOutput && ansibleLintOutput.length > 0) {
+                    // Format ansible-lint output
+                    const formattedOutput = this.formatAnsibleLintOutput(ansibleLintOutput, tempFileName);
+                    diagnostics.push(`🔍 ansible-lint:\n${formattedOutput}`);
                 } else {
-                    diagnostics.push('✅ yamllint: Ошибок не найдено');
+                    diagnostics.push('✅ ansible-lint: Ошибок не найдено');
                 }
             } catch (err: any) {
-                console.error('[IndentFixer] yamllint error:', err);
+                console.error('[IndentFixer] ansible-lint error:', err);
                 if (err.message.includes('not found') || err.message.includes('не является')) {
-                    diagnostics.push('⚠️ yamllint: Не установлен\n   Установите: pip install yamllint');
+                    diagnostics.push('⚠️ ansible-lint: Не установлен\n   Установите: pip install ansible ansible-lint');
+                } else if (err.message.includes('No module named') || err.message.includes('CRITICAL')) {
+                    diagnostics.push('⚠️ ansible-lint: Требуется ansible\n   Установите: pip install ansible ansible-lint');
                 } else {
-                    diagnostics.push(`⚠️ yamllint: ${err.message}`);
-                }
-            }
-
-            // Check for ansible-lint (only for ansible/yaml files)
-            if (document.languageId === 'ansible' || document.languageId === 'yaml') {
-                const hasAnsibleLintConfig = fs.existsSync(path.join(rootPath, '.ansible-lint'));
-                console.log(`[IndentFixer] ansible-lint config found: ${hasAnsibleLintConfig}`);
-                
-                try {
-                    const ansibleLintCmd = this.findExecutable('ansible-lint', rootPath);
-                    const ansibleLintOutput = await this.runCommand(`"${ansibleLintCmd}" -f pep8 "${tempFileName}"`, rootPath);
-                    if (ansibleLintOutput && ansibleLintOutput.length > 0) {
-                        // Format ansible-lint output
-                        const formattedOutput = this.formatAnsibleLintOutput(ansibleLintOutput, tempFileName);
-                        diagnostics.push(`🔍 ansible-lint:\n${formattedOutput}`);
-                    } else {
-                        diagnostics.push('✅ ansible-lint: Ошибок не найдено');
-                    }
-                } catch (err: any) {
-                    console.error('[IndentFixer] ansible-lint error:', err);
-                    if (err.message.includes('not found') || err.message.includes('не является')) {
-                        diagnostics.push('⚠️ ansible-lint: Не установлен\n   Установите: pip install ansible ansible-lint');
-                    } else if (err.message.includes('No module named') || err.message.includes('CRITICAL')) {
-                        diagnostics.push('⚠️ ansible-lint: Требуется ansible\n   Установите: pip install ansible ansible-lint');
-                    } else {
-                        diagnostics.push(`⚠️ ansible-lint:\n${err.message}`);
-                    }
+                    diagnostics.push(`⚠️ ansible-lint:\n${err.message}`);
                 }
             }
 
@@ -296,54 +252,19 @@ export class IndentFixer {
         outputChannel.appendLine(`File: ${document.fileName}`);
         outputChannel.appendLine(`Workspace: ${rootPath}`);
         outputChannel.appendLine('');
-
-        // СТРАТЕГИЯ АВТОИСПРАВЛЕНИЯ:
-        // 1. Попробовать pre-commit (если есть конфиг)
-        // 2. Попробовать ansible-lint --fix
-        // 3. Показать ошибки и предложить исправить вручную
-
-        // 1. Pre-commit (лучший вариант)
-        const preCommitConfigPath = path.join(rootPath, '.pre-commit-config.yaml');
-        const hasPreCommitConfig = fs.existsSync(preCommitConfigPath);
-        
-        outputChannel.appendLine(`[1] Checking pre-commit config: ${preCommitConfigPath}`);
-        outputChannel.appendLine(`    Exists: ${hasPreCommitConfig}`);
-        
-        if (hasPreCommitConfig) {
-            try {
-                outputChannel.appendLine('    Trying pre-commit...');
-                console.log('[IndentFixer] Trying pre-commit...');
-                const preCommitResult = await this.runPreCommit(text, activeEditor, rootPath);
-                
-                const originalFullText = activeEditor.document.getText();
-                console.log(`[IndentFixer] Comparing: original=${originalFullText.length} bytes, fixed=${preCommitResult.length} bytes`);
-                
-                if (preCommitResult !== originalFullText) {
-                    outputChannel.appendLine('    ✅ Pre-commit УСПЕШНО исправил файл!');
-                    outputChannel.appendLine(`    Изменено: ${originalFullText.length} -> ${preCommitResult.length} bytes`);
-                    console.log('[IndentFixer] ✅ Pre-commit fixed the file');
-                    outputChannel.show();
-                    return preCommitResult;
-                } else {
-                    outputChannel.appendLine('    ⚠️ Pre-commit выполнился, но не внес изменений');
-                    console.log('[IndentFixer] Pre-commit did not change the file');
-                }
-            } catch (err: any) {
-                outputChannel.appendLine(`    ❌ Pre-commit ОШИБКА: ${err.message}`);
-                console.error('[IndentFixer] Pre-commit failed:', err);
-            }
-        }
-
-        // 2. ansible-lint --fix
+        outputChannel.appendLine('СТРАТЕГИЯ: Используем только ansible-lint --fix');
         outputChannel.appendLine('');
-        outputChannel.appendLine('[2] Trying ansible-lint --fix...');
+
+        // SIMPLIFIED: Only ansible-lint --fix
         try {
+            outputChannel.appendLine('[1] Running ansible-lint --fix...');
             // ВАЖНО: передаем полный документ, не только выделение!
             const fullDocumentText = activeEditor.document.getText();
             const ansibleLintResult = await this.runAnsibleLintFix(fullDocumentText, document.fileName, rootPath);
             
             if (ansibleLintResult !== fullDocumentText) {
                 outputChannel.appendLine('    ✅ ansible-lint --fix УСПЕШНО исправил файл!');
+                outputChannel.appendLine(`    Изменено: ${fullDocumentText.length} -> ${ansibleLintResult.length} bytes`);
                 console.log('[IndentFixer] ✅ ansible-lint fixed the file');
                 outputChannel.show();
                 return ansibleLintResult;
@@ -352,27 +273,27 @@ export class IndentFixer {
             }
         } catch (err: any) {
             outputChannel.appendLine(`    ❌ ansible-lint --fix ОШИБКА: ${err.message}`);
-            console.log('[IndentFixer] ansible-lint --fix not available:', err.message);
+            console.log('[IndentFixer] ansible-lint --fix error:', err.message);
         }
 
-        // 3. Показываем что не смогли исправить автоматически
+        // Показываем что не смогли исправить автоматически
         outputChannel.appendLine('');
         outputChannel.appendLine('=== ИТОГ ===');
         outputChannel.appendLine('❌ Автоматическое исправление не сработало');
         outputChannel.appendLine('');
         outputChannel.appendLine('Возможные причины:');
-        outputChannel.appendLine('1. pre-commit не установлен или не настроен');
-        outputChannel.appendLine('2. ansible-lint не поддерживает --fix для этого файла');
-        outputChannel.appendLine('3. Ошибки слишком сложные для автоисправления');
+        outputChannel.appendLine('1. ansible-lint не установлен');
+        outputChannel.appendLine('2. ansible-lint не может исправить эти ошибки автоматически');
+        outputChannel.appendLine('3. Некоторые ошибки требуют ручного исправления');
         outputChannel.appendLine('');
         outputChannel.appendLine('Рекомендации:');
-        outputChannel.appendLine('- Посмотрите ошибки yamllint/ansible-lint выше');
+        outputChannel.appendLine('- Посмотрите ошибки ansible-lint выше');
         outputChannel.appendLine('- Исправьте отступы вручную по ошибкам');
-        outputChannel.appendLine('- Запустите в терминале: pre-commit run --files file.yml');
+        outputChannel.appendLine('- Запустите в терминале: ansible-lint --fix main.yml');
         outputChannel.show();
 
         vscode.window.showWarningMessage(
-            'Не удалось автоматически исправить. Смотрите "YAML Auto-Fix Debug" в Output.',
+            'ansible-lint не смог исправить автоматически. Смотрите "YAML Auto-Fix Debug" в Output.',
             'Показать логи'
         ).then(choice => {
             if (choice === 'Показать логи') {

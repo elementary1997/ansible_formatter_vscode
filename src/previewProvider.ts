@@ -92,20 +92,7 @@ export class IndentPreviewProvider implements vscode.WebviewViewProvider {
                 // Show linter results
                 resultsHtml += '<h3>🔍 Best Practices & Lint</h3>';
                 
-                // Show pre-commit raw output first
-                const preCommitOutput = IndentFixer.getLastPreCommitOutput();
-                if (preCommitOutput) {
-                    const hasErrors = preCommitOutput.code !== 0;
-                    const outputClass = hasErrors ? 'lint-error' : 'lint-success';
-                    resultsHtml += `<div class="${outputClass}">`;
-                    resultsHtml += `<h4>🔧 pre-commit (exit code: ${preCommitOutput.code})</h4>`;
-                    resultsHtml += `<pre>${escapeHtml(preCommitOutput.stdout)}</pre>`;
-                    if (preCommitOutput.stderr) {
-                        resultsHtml += `<pre style="color: orange;">${escapeHtml(preCommitOutput.stderr)}</pre>`;
-                    }
-                    resultsHtml += `</div>`;
-                }
-                
+                // Show linter results (only ansible-lint now)
                 if (linterResultsOriginal.length > 0) {
                     resultsHtml += '<div class="lint-results">';
                     for (const result of linterResultsOriginal) {
