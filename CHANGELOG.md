@@ -6,13 +6,15 @@ All notable changes to the "Ansible Lint Helper" extension will be documented in
 
 ### New Features
 
-#### 🔀 Error Sorting by Severity
-- Errors are now **always sorted by severity**:
-  - ❌ **ERRORS** (red section) — shown first
-  - ⚠️ **WARNINGS** (orange section) — shown second
-  - ℹ️ **INFO** (blue section) — shown last
-- Each section has a colored header with count
-- Within each section, errors are sorted by file and line number
+#### 🔍 Error Filtering by Severity
+- **Filter buttons** to show only specific error types:
+  - `All` — show all errors (default)
+  - `❌ Errors` — show only errors
+  - `⚠️ Warnings` — show only warnings
+  - `ℹ️ Info` — show only info messages
+- Each button shows count of matching items
+- Errors remain **grouped by file** (collapsible)
+- Filter preference is saved and restored
 
 ---
 

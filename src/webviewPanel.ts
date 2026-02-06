@@ -447,36 +447,45 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             display: inline-block;
         }
 
-        .severity-section {
-            margin-bottom: 15px;
+        .filter-bar {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
         }
 
-        .severity-header {
-            padding: 10px 12px;
-            font-weight: bold;
-            font-size: 0.9em;
-            border-radius: 4px;
-            margin-bottom: 8px;
+        .filter-btn {
+            padding: 4px 10px;
+            font-size: 0.8em;
+            border-radius: 12px;
+            cursor: pointer;
+            border: 1px solid var(--vscode-button-background);
+            background: transparent;
+            color: var(--vscode-foreground);
+            transition: all 0.2s;
         }
 
-        .severity-error-header {
-            background: rgba(255, 0, 0, 0.15);
-            color: var(--vscode-errorForeground);
-            border-left: 3px solid var(--vscode-errorForeground);
+        .filter-btn:hover {
+            background: var(--vscode-list-hoverBackground);
         }
 
-        .severity-warning-header {
-            background: rgba(255, 165, 0, 0.15);
-            color: var(--vscode-editorWarning-foreground);
-            border-left: 3px solid var(--vscode-editorWarning-foreground);
+        .filter-btn.active {
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
         }
 
-        .severity-info-header {
-            background: rgba(0, 150, 255, 0.15);
-            color: var(--vscode-editorInfo-foreground);
-            border-left: 3px solid var(--vscode-editorInfo-foreground);
+        .filter-btn.error-filter.active {
+            background: var(--vscode-errorForeground);
         }
 
+        .filter-btn.warning-filter.active {
+            background: var(--vscode-editorWarning-foreground);
+            color: #000;
+        }
+
+        .filter-btn.info-filter.active {
+            background: var(--vscode-editorInfo-foreground);
+        }
     </style>
 </head>
 <body>
@@ -491,6 +500,13 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         </div>
     </div>
 
+    <div class="filter-bar" id="filter-bar" style="display: none;">
+        <button class="filter-btn active" onclick="setFilter('all')" id="filter-all">All</button>
+        <button class="filter-btn error-filter" onclick="setFilter('error')" id="filter-error">❌ Errors</button>
+        <button class="filter-btn warning-filter" onclick="setFilter('warning')" id="filter-warning">⚠️ Warnings</button>
+        <button class="filter-btn info-filter" onclick="setFilter('info')" id="filter-info">ℹ️ Info</button>
+    </div>
+
     <div id="errors-container">
         <div class="empty-state">
             <div class="empty-icon">✓</div>
@@ -503,13 +519,18 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
 
     <script>
         const vscode = acquireVsCodeApi();
+        let allErrors = []; // Все ошибки
+        let currentFilter = 'all'; // Текущий фильтр
 
         // Восстанавливаем сохраненное состояние при загрузке
         window.addEventListener('load', () => {
             const state = vscode.getState();
             if (state && state.errors) {
                 console.log('[Webview] Restoring state:', state.errors.length, 'errors');
-                updateErrorsUI(state.errors);
+                allErrors = state.errors;
+                currentFilter = state.filter || 'all';
+                updateFilterButtons();
+                updateErrorsUI(allErrors);
             }
         });
 
@@ -517,34 +538,37 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             const message = event.data;
 
             if (message.type === 'updateErrors') {
-                updateErrorsUI(message.errors);
+                allErrors = message.errors;
+                updateErrorsUI(allErrors);
                 // Сохраняем состояние для восстановления
-                vscode.setState({ errors: message.errors });
+                vscode.setState({ errors: allErrors, filter: currentFilter });
             }
         });
 
-        function getSeverityOrder(severity) {
-            if (severity === 'error') return 0;
-            if (severity === 'warning') return 1;
-            return 2; // info
+        function setFilter(filter) {
+            currentFilter = filter;
+            updateFilterButtons();
+            updateErrorsUI(allErrors);
+            vscode.setState({ errors: allErrors, filter: currentFilter });
         }
 
-        // Сортировка всегда по severity: Errors → Warnings → Info
-        function sortBySeverity(errors) {
-            return [...errors].sort((a, b) => {
-                const severityDiff = getSeverityOrder(a.severity) - getSeverityOrder(b.severity);
-                if (severityDiff !== 0) return severityDiff;
-                // Внутри одного severity - по файлу и строке
-                if (a.file !== b.file) return a.file.localeCompare(b.file);
-                return a.line - b.line;
-            });
+        function updateFilterButtons() {
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('filter-' + currentFilter).classList.add('active');
+        }
+
+        function filterErrors(errors) {
+            if (currentFilter === 'all') return errors;
+            if (currentFilter === 'info') {
+                return errors.filter(e => e.severity !== 'error' && e.severity !== 'warning');
+            }
+            return errors.filter(e => e.severity === currentFilter);
         }
 
         function updateErrorsUI(errors) {
-            // Всегда сортируем по severity
-            errors = sortBySeverity(errors);
             const container = document.getElementById('errors-container');
             const stats = document.getElementById('stats');
+            const filterBar = document.getElementById('filter-bar');
 
             if (errors.length === 0) {
                 container.innerHTML = \`
@@ -554,27 +578,52 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                     </div>
                 \`;
                 stats.textContent = 'No errors';
+                filterBar.style.display = 'none';
                 return;
             }
 
-            // Группируем по файлам
-            const errorsByFile = {};
+            // Показываем фильтры если есть ошибки
+            filterBar.style.display = 'flex';
+
+            // Подсчитываем статистику (по всем ошибкам)
+            let errorCount = 0;
+            let warningCount = 0;
+            let infoCount = 0;
             for (const error of errors) {
+                if (error.severity === 'error') errorCount++;
+                else if (error.severity === 'warning') warningCount++;
+                else infoCount++;
+            }
+
+            // Обновляем кнопки фильтров с количеством
+            document.getElementById('filter-all').textContent = 'All (' + errors.length + ')';
+            document.getElementById('filter-error').textContent = '❌ Errors (' + errorCount + ')';
+            document.getElementById('filter-warning').textContent = '⚠️ Warnings (' + warningCount + ')';
+            document.getElementById('filter-info').textContent = 'ℹ️ Info (' + infoCount + ')';
+
+            stats.textContent = \`\${errorCount} errors, \${warningCount} warnings\`;
+
+            // Применяем фильтр
+            const filteredErrors = filterErrors(errors);
+
+            if (filteredErrors.length === 0) {
+                container.innerHTML = \`
+                    <div class="empty-state">
+                        <div class="empty-icon">🔍</div>
+                        <div>No \${currentFilter === 'info' ? 'info messages' : currentFilter + 's'} found</div>
+                    </div>
+                \`;
+                return;
+            }
+
+            // Группируем отфильтрованные ошибки по файлам
+            const errorsByFile = {};
+            for (const error of filteredErrors) {
                 if (!errorsByFile[error.fullPath]) {
                     errorsByFile[error.fullPath] = [];
                 }
                 errorsByFile[error.fullPath].push(error);
             }
-
-            // Подсчитываем статистику
-            let errorCount = 0;
-            let warningCount = 0;
-            for (const error of errors) {
-                if (error.severity === 'error') errorCount++;
-                else if (error.severity === 'warning') warningCount++;
-            }
-
-            stats.textContent = \`\${errorCount} errors, \${warningCount} warnings\`;
 
             // Функция рендеринга одной ошибки
             function renderError(error) {
@@ -601,35 +650,32 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                 \`;
             }
 
-            // Рендерим ошибки - всегда по секциям severity
+            // Рендерим ошибки - группируем по файлам
             let html = '';
+            let fileIndex = 0;
 
-            const errorErrors = errors.filter(e => e.severity === 'error');
-            const warningErrors = errors.filter(e => e.severity === 'warning');
-            const infoErrors = errors.filter(e => e.severity !== 'error' && e.severity !== 'warning');
+            for (const [file, fileErrors] of Object.entries(errorsByFile)) {
+                const fileName = fileErrors[0].file;
+                const fileId = 'file-' + fileIndex;
+                fileIndex++;
 
-            if (errorErrors.length > 0) {
-                html += \`<div class="severity-section"><div class="severity-header severity-error-header">❌ ERRORS (\${errorErrors.length})</div>\`;
-                for (const error of errorErrors) {
+                html += \`
+                    <div class="error-group">
+                        <div class="file-header" onclick="toggleFile('\${fileId}')" id="header-\${fileId}">
+                            <div style="display: flex; align-items: center;">
+                                <span class="collapse-icon">▼</span>
+                                <span class="file-name">📁 \${fileName}</span>
+                            </div>
+                            <span class="error-count">\${fileErrors.length} issues</span>
+                        </div>
+                        <div class="file-errors" id="\${fileId}">
+                \`;
+
+                for (const error of fileErrors) {
                     html += renderError(error);
                 }
-                html += '</div>';
-            }
 
-            if (warningErrors.length > 0) {
-                html += \`<div class="severity-section"><div class="severity-header severity-warning-header">⚠️ WARNINGS (\${warningErrors.length})</div>\`;
-                for (const error of warningErrors) {
-                    html += renderError(error);
-                }
-                html += '</div>';
-            }
-
-            if (infoErrors.length > 0) {
-                html += \`<div class="severity-section"><div class="severity-header severity-info-header">ℹ️ INFO (\${infoErrors.length})</div>\`;
-                for (const error of infoErrors) {
-                    html += renderError(error);
-                }
-                html += '</div>';
+                html += '</div></div>'; // Закрываем file-errors и error-group
             }
 
             container.innerHTML = html;
