@@ -113,6 +113,7 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             severity: error.severity,
             source: error.source,
             fixable: error.fixable,
+            documentationUrl: error.documentationUrl,
             checkGroup: (error as any).checkGroup
         }));
     }
@@ -272,6 +273,109 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             font-size: 48px;
             margin-bottom: 10px;
         }
+
+        /* Новые стили для улучшенного отображения */
+        .error-header-full {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .error-title {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 1;
+            cursor: pointer;
+            flex-wrap: wrap;
+        }
+
+        .severity-icon {
+            font-size: 1em;
+        }
+
+        .severity-badge {
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.7em;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+
+        .severity-badge.severity-error {
+            background: var(--vscode-errorForeground);
+            color: var(--vscode-editor-background);
+        }
+
+        .severity-badge.severity-warning {
+            background: var(--vscode-editorWarning-foreground);
+            color: var(--vscode-editor-background);
+        }
+
+        .severity-badge.severity-info {
+            background: var(--vscode-editorInfo-foreground);
+            color: var(--vscode-editor-background);
+        }
+
+        .error-source {
+            font-size: 0.75em;
+            color: var(--vscode-descriptionForeground);
+            background: var(--vscode-badge-background);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+
+        .error-rule-name {
+            font-size: 0.8em;
+            color: var(--vscode-textLink-foreground);
+            font-family: monospace;
+            font-weight: 500;
+        }
+
+        .error-location-inline {
+            font-size: 0.75em;
+            color: var(--vscode-descriptionForeground);
+            margin-left: auto;
+        }
+
+        .error-description {
+            font-size: 0.9em;
+            line-height: 1.5;
+            cursor: pointer;
+            padding: 4px 0;
+            color: var(--vscode-foreground);
+        }
+
+        .doc-link {
+            font-size: 0.75em;
+            color: var(--vscode-textLink-foreground);
+            text-decoration: none;
+            padding: 2px 6px;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            white-space: nowrap;
+        }
+
+        .doc-link:hover {
+            background: var(--vscode-list-hoverBackground);
+            text-decoration: underline;
+        }
+
+        .fixable-badge {
+            font-size: 0.75em;
+            color: var(--vscode-terminal-ansiGreen);
+            background: rgba(0, 255, 0, 0.1);
+            padding: 3px 8px;
+            border-radius: 3px;
+            margin-top: 4px;
+            display: inline-block;
+        }
     </style>
 </head>
 <body>
@@ -378,13 +482,27 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                     \`;
 
                     for (const error of yamllintErrors) {
+                        const severityIcon = error.severity === 'error' ? '❌' : error.severity === 'warning' ? '⚠️' : 'ℹ️';
+                        const severityBadge = error.severity.toUpperCase();
+                        const docLink = error.documentationUrl ?
+                            \`<a href="\${error.documentationUrl}" class="doc-link" onclick="event.stopPropagation();" title="View documentation">📖 Docs</a>\` : '';
+
                         html += \`
-                            <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                <div class="error-header">
-                                    <span class="error-location">Line \${error.line}</span>
-                                    <span class="error-rule">[\${error.rule}]</span>
+                            <div class="error-item \${error.severity}">
+                                <div class="error-header-full">
+                                    <div class="error-title" onclick="gotoError('\${error.fullPath}', \${error.line})">
+                                        <span class="severity-icon">\${severityIcon}</span>
+                                        <span class="severity-badge severity-\${error.severity}">\${severityBadge}</span>
+                                        <span class="error-source">[yamllint]</span>
+                                        <span class="error-rule-name">\${error.rule}</span>
+                                        <span class="error-location-inline">Line \${error.line}\${error.column ? ':\${error.column}' : ''}</span>
+                                    </div>
+                                    \${docLink}
                                 </div>
-                                <div class="error-message">\${escapeHtml(error.message)}</div>
+                                <div class="error-description" onclick="gotoError('\${error.fullPath}', \${error.line})">
+                                    \${escapeHtml(error.message)}
+                                </div>
+                                \${error.fixable ? '<div class="fixable-badge">🔧 Auto-fixable</div>' : ''}
                             </div>
                         \`;
                     }
@@ -399,13 +517,27 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                     \`;
 
                     for (const error of preCommitErrors) {
+                        const severityIcon = error.severity === 'error' ? '❌' : error.severity === 'warning' ? '⚠️' : 'ℹ️';
+                        const severityBadge = error.severity.toUpperCase();
+                        const docLink = error.documentationUrl ?
+                            \`<a href="\${error.documentationUrl}" class="doc-link" onclick="event.stopPropagation();" title="View documentation">📖 Docs</a>\` : '';
+
                         html += \`
-                            <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                <div class="error-header">
-                                    <span class="error-location">Line \${error.line}</span>
-                                    <span class="error-rule">[\${error.rule}]</span>
+                            <div class="error-item \${error.severity}">
+                                <div class="error-header-full">
+                                    <div class="error-title" onclick="gotoError('\${error.fullPath}', \${error.line})">
+                                        <span class="severity-icon">\${severityIcon}</span>
+                                        <span class="severity-badge severity-\${error.severity}">\${severityBadge}</span>
+                                        <span class="error-source">[pre-commit]</span>
+                                        <span class="error-rule-name">\${error.rule}</span>
+                                        <span class="error-location-inline">Line \${error.line}\${error.column ? ':\${error.column}' : ''}</span>
+                                    </div>
+                                    \${docLink}
                                 </div>
-                                <div class="error-message">\${escapeHtml(error.message)}</div>
+                                <div class="error-description" onclick="gotoError('\${error.fullPath}', \${error.line})">
+                                    \${escapeHtml(error.message)}
+                                </div>
+                                \${error.fixable ? '<div class="fixable-badge">🔧 Auto-fixable</div>' : ''}
                             </div>
                         \`;
                     }
@@ -420,13 +552,27 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                     \`;
 
                     for (const error of ansibleErrors) {
+                        const severityIcon = error.severity === 'error' ? '❌' : error.severity === 'warning' ? '⚠️' : 'ℹ️';
+                        const severityBadge = error.severity.toUpperCase();
+                        const docLink = error.documentationUrl ?
+                            \`<a href="\${error.documentationUrl}" class="doc-link" onclick="event.stopPropagation();" title="View documentation">📖 Docs</a>\` : '';
+
                         html += \`
-                            <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                <div class="error-header">
-                                    <span class="error-location">Line \${error.line}</span>
-                                    <span class="error-rule">[\${error.rule}]</span>
+                            <div class="error-item \${error.severity}">
+                                <div class="error-header-full">
+                                    <div class="error-title" onclick="gotoError('\${error.fullPath}', \${error.line})">
+                                        <span class="severity-icon">\${severityIcon}</span>
+                                        <span class="severity-badge severity-\${error.severity}">\${severityBadge}</span>
+                                        <span class="error-source">[ansible-lint]</span>
+                                        <span class="error-rule-name">\${error.rule}</span>
+                                        <span class="error-location-inline">Line \${error.line}\${error.column ? ':\${error.column}' : ''}</span>
+                                    </div>
+                                    \${docLink}
                                 </div>
-                                <div class="error-message">\${escapeHtml(error.message)}</div>
+                                <div class="error-description" onclick="gotoError('\${error.fullPath}', \${error.line})">
+                                    \${escapeHtml(error.message)}
+                                </div>
+                                \${error.fixable ? '<div class="fixable-badge">🔧 Auto-fixable</div>' : ''}
                             </div>
                         \`;
                     }
@@ -434,13 +580,27 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
 
                 // Ошибки без группы
                 for (const error of otherErrors) {
+                    const severityIcon = error.severity === 'error' ? '❌' : error.severity === 'warning' ? '⚠️' : 'ℹ️';
+                    const severityBadge = error.severity.toUpperCase();
+                    const docLink = error.documentationUrl ?
+                        \`<a href="\${error.documentationUrl}" class="doc-link" onclick="event.stopPropagation();" title="View documentation">📖 Docs</a>\` : '';
+
                     html += \`
-                        <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                            <div class="error-header">
-                                <span class="error-location">Line \${error.line}</span>
-                                <span class="error-rule">[\${error.rule}]</span>
+                        <div class="error-item \${error.severity}">
+                            <div class="error-header-full">
+                                <div class="error-title" onclick="gotoError('\${error.fullPath}', \${error.line})">
+                                    <span class="severity-icon">\${severityIcon}</span>
+                                    <span class="severity-badge severity-\${error.severity}">\${severityBadge}</span>
+                                    <span class="error-source">[\${error.source}]</span>
+                                    <span class="error-rule-name">\${error.rule}</span>
+                                    <span class="error-location-inline">Line \${error.line}\${error.column ? ':\${error.column}' : ''}</span>
+                                </div>
+                                \${docLink}
                             </div>
-                            <div class="error-message">\${escapeHtml(error.message)}</div>
+                            <div class="error-description" onclick="gotoError('\${error.fullPath}', \${error.line})">
+                                \${escapeHtml(error.message)}
+                            </div>
+                            \${error.fixable ? '<div class="fixable-badge">🔧 Auto-fixable</div>' : ''}
                         </div>
                     \`;
                 }
