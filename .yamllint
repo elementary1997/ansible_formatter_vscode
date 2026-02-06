@@ -126,3 +126,6 @@ ignore: |
   node_modules/
   .vscode/
   .idea/
+  .yamllint
+  .ansible-lint
+  .pre-commit-config.yaml

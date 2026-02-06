@@ -240,11 +240,32 @@ async function ignoreYamllintRule(workspaceRoot: string, rule: string): Promise<
     if (fs.existsSync(yamllintPath)) {
         content = fs.readFileSync(yamllintPath, 'utf8');
     } else {
-        // Создаем базовый конфиг
+        // Создаем базовый конфиг с исключениями
         content = `---
 extends: default
 
 rules:
+
+# Ignore patterns
+ignore: |
+  .git/
+  .venv/
+  venv/
+  __pycache__/
+  *.pyc
+  .tox/
+  .cache/
+  .pytest_cache/
+  .mypy_cache/
+  dist/
+  build/
+  *.egg-info/
+  node_modules/
+  .vscode/
+  .idea/
+  .yamllint
+  .ansible-lint
+  .pre-commit-config.yaml
 `;
     }
 
