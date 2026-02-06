@@ -121,14 +121,21 @@ export class IndentPreviewProvider implements vscode.WebviewViewProvider {
 
                 // Show formatting results
                 resultsHtml += '<h3>📝 Автоисправление</h3>';
+                
+                console.log(`[PreviewProvider] Original text length: ${text.length}`);
+                console.log(`[PreviewProvider] Fixed text length: ${fixed.length}`);
+                console.log(`[PreviewProvider] Texts are ${fixed === text ? 'SAME' : 'DIFFERENT'}`);
+                
                 if (fixed === text) {
-                    resultsHtml += `<p style="color: orange;">⚠️ Автоматическое исправление не доступно или не сработало.</p>
+                    resultsHtml += `<p style="color: orange;">⚠️ Автоматическое исправление не сработало.</p>
+                                   <p style="color: gray;">Возможно, ошибки нужно исправлять вручную.</p>
                                    <p style="color: gray;">Используйте инструменты вручную:</p>
                                    <pre style="font-size: 10px;">
 # В терминале:
-pre-commit run --files file.yml
-ansible-lint --fix file.yml
-yamllint --strict file.yml</pre>`;
+cd test_extension
+pre-commit run --files main.yml
+ansible-lint --fix main.yml
+yamllint --strict main.yml</pre>`;
                 } else {
                     // Calculate range for entire document
                     const lastLine = editor.document.lineCount - 1;
@@ -137,7 +144,9 @@ yamllint --strict file.yml</pre>`;
                     // Escape the fixed text properly for JSON
                     const fixedTextJson = JSON.stringify(fixed);
                     
-                    resultsHtml += `<p style="color: orange;">⚠ Найдены проблемы с отступами - исправленный вариант:</p>
+                    const bytesChanged = Math.abs(fixed.length - text.length);
+                    resultsHtml += `<p style="color: green;">✅ Автоисправление выполнено! (изменено ${bytesChanged} байт)</p>
+                         <p style="color: gray;">Примечание: Могут остаться ошибки, которые нужно исправлять вручную</p>
                          <div class="fixed-container">
                             <pre>${escapeHtml(fixed)}</pre>
                          </div>

@@ -315,13 +315,18 @@ export class IndentFixer {
                 console.log('[IndentFixer] Trying pre-commit...');
                 const preCommitResult = await this.runPreCommit(text, activeEditor, rootPath);
                 
-                if (preCommitResult !== text) {
+                const originalFullText = activeEditor.document.getText();
+                console.log(`[IndentFixer] Comparing: original=${originalFullText.length} bytes, fixed=${preCommitResult.length} bytes`);
+                
+                if (preCommitResult !== originalFullText) {
                     outputChannel.appendLine('    ✅ Pre-commit УСПЕШНО исправил файл!');
+                    outputChannel.appendLine(`    Изменено: ${originalFullText.length} -> ${preCommitResult.length} bytes`);
                     console.log('[IndentFixer] ✅ Pre-commit fixed the file');
                     outputChannel.show();
                     return preCommitResult;
                 } else {
                     outputChannel.appendLine('    ⚠️ Pre-commit выполнился, но не внес изменений');
+                    console.log('[IndentFixer] Pre-commit did not change the file');
                 }
             } catch (err: any) {
                 outputChannel.appendLine(`    ❌ Pre-commit ОШИБКА: ${err.message}`);
