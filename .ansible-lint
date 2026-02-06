@@ -1,20 +1,26 @@
----
-# Профиль production обеспечивает строгие требования best practices
+﻿---
+# Ansible-lint configuration with Ansible project structure validation
 profile: production
 
-# Исключаемые пути
+# Maximum line length (150 characters)
+max_line_length: 150
+
+# Excluded paths
 exclude_paths:
   - .cache/
   - .github/
   - venv/
   - node_modules/
   - out/
+  - test_extension/
+  - build/
 
-# Правила, которые будут выдавать только предупреждения
+# Rules that will only warn
 warn_list:
   - command-instead-of-module
   - command-instead-of-shell
+  - no-changed-when
+  - risky-file-permissions
 
-# Пропускаемые правила (опционально)
-# skip_list:
-#   - yaml
+# Strict mode for production
+strict: true
