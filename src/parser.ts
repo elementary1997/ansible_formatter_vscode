@@ -221,7 +221,9 @@ export class Parser {
             const fixingMatch = line.match(/^Fixing\s+(.+)$/);
             if (fixingMatch && currentHookId) {
                 const file = fixingMatch[1].trim();
-                const filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
+                let filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
+                filePath = path.resolve(filePath);
+                console.log(`[Parser] Pre-commit fixing: file="${file}", resolved="${filePath}"`);
 
                 let message = 'File modified';
                 if (currentHookId === 'trailing-whitespace') {
@@ -252,7 +254,12 @@ export class Parser {
             const locationMatch = line.match(/in\s+"([^"]+)",\s+line\s+(\d+)(?:,\s+column\s+(\d+))?/);
             if (locationMatch && currentHookId) {
                 const [, file, lineNum, col] = locationMatch;
-                const filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
+                // Строим полный путь
+                let filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
+                // Нормализуем путь (убираем ../, ./, повторные слеши)
+                filePath = path.resolve(filePath);
+
+                console.log(`[Parser] Pre-commit location: file="${file}", workspaceRoot="${workspaceRoot}", resolved="${filePath}"`);
 
                 // Собираем сообщение из накопленного контекста
                 const message = errorContext.length > 0
@@ -279,7 +286,9 @@ export class Parser {
             const fileMessageMatch = line.match(/^([^\s:]+\.(yml|yaml|ts|js|md|json|py)):\s*(.+)$/);
             if (fileMessageMatch && currentHookId) {
                 const [, file, , message] = fileMessageMatch;
-                const filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
+                let filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
+                filePath = path.resolve(filePath);
+                console.log(`[Parser] Pre-commit file message: file="${file}", resolved="${filePath}"`);
 
                 errors.push({
                     file: filePath,
