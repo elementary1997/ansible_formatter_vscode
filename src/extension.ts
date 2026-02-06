@@ -160,62 +160,74 @@ async function runAnsibleLintOnCurrentFile(): Promise<void> {
         }, async (progress) => {
             const allErrors: any[] = [];
 
-            // Шаг 1: Запускаем yamllint (YAML синтаксис - самый первый)
-            progress.report({ increment: 0, message: 'Running yamllint...' });
-            try {
-                const yamllintResult = await Executor.runYamllint(filePath, workspaceRoot);
-                const yamllintErrors = Parser.parse(yamllintResult, workspaceRoot, 'yamllint');
+            // Получаем настройки линтеров
+            const config = vscode.workspace.getConfiguration('ansible-lint');
+            const enableYamllint = config.get<boolean>('enableYamllint', true);
+            const enablePreCommit = config.get<boolean>('enablePreCommit', true);
+            const enableAnsibleLint = config.get<boolean>('enableAnsibleLint', true);
 
-                if (yamllintErrors.length > 0) {
-                    // Добавляем метаданные о группе
-                    yamllintErrors.forEach(error => {
-                        error.checkGroup = 'yamllint';
-                    });
-                    allErrors.push(...yamllintErrors);
+            // Шаг 1: Запускаем yamllint (YAML синтаксис - самый первый)
+            if (enableYamllint) {
+                progress.report({ increment: 0, message: 'Running yamllint...' });
+                try {
+                    const yamllintResult = await Executor.runYamllint(filePath, workspaceRoot);
+                    const yamllintErrors = Parser.parse(yamllintResult, workspaceRoot, 'yamllint');
+
+                    if (yamllintErrors.length > 0) {
+                        // Добавляем метаданные о группе
+                        yamllintErrors.forEach(error => {
+                            error.checkGroup = 'yamllint';
+                        });
+                        allErrors.push(...yamllintErrors);
+                    }
+                } catch (error: any) {
+                    console.log('[Extension] yamllint not available or failed:', error.message);
                 }
-            } catch (error: any) {
-                console.log('[Extension] yamllint not available or failed:', error.message);
             }
 
             progress.report({ increment: 20, message: 'Running pre-commit...' });
 
-            // Шаг 2: Запускаем pre-commit (если доступен)
-            try {
-                const preCommitResult = await Executor.runPreCommit(filePath, workspaceRoot);
-                const preCommitErrors = Parser.parse(preCommitResult, workspaceRoot, 'pre-commit');
+            // Шаг 2: Запускаем pre-commit (если включен)
+            if (enablePreCommit) {
+                try {
+                    const preCommitResult = await Executor.runPreCommit(filePath, workspaceRoot);
+                    const preCommitErrors = Parser.parse(preCommitResult, workspaceRoot, 'pre-commit');
 
-                if (preCommitErrors.length > 0) {
-                    // Добавляем метаданные о группе
-                    preCommitErrors.forEach(error => {
-                        error.checkGroup = 'pre-commit';
-                    });
-                    allErrors.push(...preCommitErrors);
+                    if (preCommitErrors.length > 0) {
+                        // Добавляем метаданные о группе
+                        preCommitErrors.forEach(error => {
+                            error.checkGroup = 'pre-commit';
+                        });
+                        allErrors.push(...preCommitErrors);
+                    }
+                } catch (error: any) {
+                    console.log('[Extension] pre-commit not available or failed:', error.message);
                 }
-            } catch (error: any) {
-                console.log('[Extension] pre-commit not available or failed:', error.message);
             }
 
             progress.report({ increment: 50, message: 'Running ansible-lint...' });
 
-            // Шаг 3: Запускаем ansible-lint (Ansible best practices)
-            const ansibleResult = await Executor.runAnsibleLint(filePath, workspaceRoot, 'pep8');
-            const ansibleErrors = Parser.parse(ansibleResult, workspaceRoot, 'pep8');
+            // Шаг 3: Запускаем ansible-lint (если включен)
+            if (enableAnsibleLint) {
+                const ansibleResult = await Executor.runAnsibleLint(filePath, workspaceRoot, 'pep8');
+                const ansibleErrors = Parser.parse(ansibleResult, workspaceRoot, 'pep8');
 
-            if (ansibleErrors.length > 0) {
-                // Фильтруем load-failure ошибки если уже есть syntax ошибки от yamllint
-                const hasYamlSyntaxErrors = allErrors.some(e =>
-                    e.source === 'yamllint' && e.rule === 'syntax'
-                );
+                if (ansibleErrors.length > 0) {
+                    // Фильтруем load-failure ошибки если уже есть syntax ошибки от yamllint
+                    const hasYamlSyntaxErrors = allErrors.some(e =>
+                        e.source === 'yamllint' && e.rule === 'syntax'
+                    );
 
-                const filteredAnsibleErrors = hasYamlSyntaxErrors
-                    ? ansibleErrors.filter(e => !e.rule.includes('load-failure'))
-                    : ansibleErrors;
+                    const filteredAnsibleErrors = hasYamlSyntaxErrors
+                        ? ansibleErrors.filter(e => !e.rule.includes('load-failure'))
+                        : ansibleErrors;
 
-                // Добавляем метаданные о группе
-                filteredAnsibleErrors.forEach(error => {
-                    error.checkGroup = 'ansible-lint';
-                });
-                allErrors.push(...filteredAnsibleErrors);
+                    // Добавляем метаданные о группе
+                    filteredAnsibleErrors.forEach(error => {
+                        error.checkGroup = 'ansible-lint';
+                    });
+                    allErrors.push(...filteredAnsibleErrors);
+                }
             }
 
             progress.report({ increment: 90 });
@@ -266,59 +278,71 @@ async function runAnsibleLintOnAllFiles(): Promise<void> {
         }, async (progress) => {
             const allErrors: any[] = [];
 
-            // Шаг 1: Запускаем yamllint на всех файлах
-            progress.report({ increment: 0, message: 'Running yamllint...' });
-            try {
-                const yamllintResult = await Executor.runYamllintAll(workspaceRoot);
-                const yamllintErrors = Parser.parse(yamllintResult, workspaceRoot, 'yamllint');
+            // Получаем настройки линтеров
+            const config = vscode.workspace.getConfiguration('ansible-lint');
+            const enableYamllint = config.get<boolean>('enableYamllint', true);
+            const enablePreCommit = config.get<boolean>('enablePreCommit', true);
+            const enableAnsibleLint = config.get<boolean>('enableAnsibleLint', true);
 
-                if (yamllintErrors.length > 0) {
-                    yamllintErrors.forEach(error => {
-                        error.checkGroup = 'yamllint';
-                    });
-                    allErrors.push(...yamllintErrors);
+            // Шаг 1: Запускаем yamllint на всех файлах
+            if (enableYamllint) {
+                progress.report({ increment: 0, message: 'Running yamllint...' });
+                try {
+                    const yamllintResult = await Executor.runYamllintAll(workspaceRoot);
+                    const yamllintErrors = Parser.parse(yamllintResult, workspaceRoot, 'yamllint');
+
+                    if (yamllintErrors.length > 0) {
+                        yamllintErrors.forEach(error => {
+                            error.checkGroup = 'yamllint';
+                        });
+                        allErrors.push(...yamllintErrors);
+                    }
+                } catch (error: any) {
+                    console.log('[Extension] yamllint not available or failed:', error.message);
                 }
-            } catch (error: any) {
-                console.log('[Extension] yamllint not available or failed:', error.message);
             }
 
             progress.report({ increment: 20, message: 'Running pre-commit...' });
 
             // Шаг 2: Запускаем pre-commit на всех файлах
-            try {
-                const preCommitResult = await Executor.runPreCommitAll(workspaceRoot);
-                const preCommitErrors = Parser.parse(preCommitResult, workspaceRoot, 'pre-commit');
+            if (enablePreCommit) {
+                try {
+                    const preCommitResult = await Executor.runPreCommitAll(workspaceRoot);
+                    const preCommitErrors = Parser.parse(preCommitResult, workspaceRoot, 'pre-commit');
 
-                if (preCommitErrors.length > 0) {
-                    preCommitErrors.forEach(error => {
-                        error.checkGroup = 'pre-commit';
-                    });
-                    allErrors.push(...preCommitErrors);
+                    if (preCommitErrors.length > 0) {
+                        preCommitErrors.forEach(error => {
+                            error.checkGroup = 'pre-commit';
+                        });
+                        allErrors.push(...preCommitErrors);
+                    }
+                } catch (error: any) {
+                    console.log('[Extension] pre-commit not available or failed:', error.message);
                 }
-            } catch (error: any) {
-                console.log('[Extension] pre-commit not available or failed:', error.message);
             }
 
             progress.report({ increment: 50, message: 'Running ansible-lint...' });
 
             // Шаг 3: Запускаем ansible-lint на всех файлах
-            const result = await Executor.runAnsibleLintAll(workspaceRoot, 'pep8');
-            const ansibleErrors = Parser.parse(result, workspaceRoot, 'pep8');
+            if (enableAnsibleLint) {
+                const result = await Executor.runAnsibleLintAll(workspaceRoot, 'pep8');
+                const ansibleErrors = Parser.parse(result, workspaceRoot, 'pep8');
 
-            if (ansibleErrors.length > 0) {
-                // Фильтруем load-failure ошибки если уже есть syntax ошибки от yamllint
-                const hasYamlSyntaxErrors = allErrors.some(e =>
-                    e.source === 'yamllint' && e.rule === 'syntax'
-                );
+                if (ansibleErrors.length > 0) {
+                    // Фильтруем load-failure ошибки если уже есть syntax ошибки от yamllint
+                    const hasYamlSyntaxErrors = allErrors.some(e =>
+                        e.source === 'yamllint' && e.rule === 'syntax'
+                    );
 
-                const filteredAnsibleErrors = hasYamlSyntaxErrors
-                    ? ansibleErrors.filter(e => !e.rule.includes('load-failure'))
-                    : ansibleErrors;
+                    const filteredAnsibleErrors = hasYamlSyntaxErrors
+                        ? ansibleErrors.filter(e => !e.rule.includes('load-failure'))
+                        : ansibleErrors;
 
-                filteredAnsibleErrors.forEach(error => {
-                    error.checkGroup = 'ansible-lint';
-                });
-                allErrors.push(...filteredAnsibleErrors);
+                    filteredAnsibleErrors.forEach(error => {
+                        error.checkGroup = 'ansible-lint';
+                    });
+                    allErrors.push(...filteredAnsibleErrors);
+                }
             }
 
             progress.report({ increment: 90 });

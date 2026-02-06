@@ -61,6 +61,9 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                 case 'fixAll':
                     vscode.commands.executeCommand('ansible-lint.fixAll');
                     break;
+                case 'ignoreRule':
+                    vscode.commands.executeCommand('ansible-lint.ignoreRule', data.rule);
+                    break;
                 case 'refresh':
                     vscode.commands.executeCommand('ansible-lint.run');
                     break;
@@ -379,13 +382,33 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             text-decoration: underline;
         }
 
+        .error-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 4px;
+            flex-wrap: wrap;
+        }
+
         .fixable-badge {
             font-size: 0.75em;
             color: var(--vscode-terminal-ansiGreen);
             background: rgba(0, 255, 0, 0.1);
             padding: 3px 8px;
             border-radius: 3px;
-            margin-top: 4px;
+        }
+
+        .ignore-btn {
+            font-size: 0.75em;
+            color: var(--vscode-terminal-ansiYellow);
+            background: rgba(255, 165, 0, 0.1);
+            padding: 3px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .ignore-btn:hover {
+            background: rgba(255, 165, 0, 0.3);
             display: inline-block;
         }
     </style>
@@ -497,17 +520,20 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                         const severityIcon = error.severity === 'error' ? '❌' : error.severity === 'warning' ? '⚠️' : 'ℹ️';
 
                         html += \`
-                            <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                <div class="error-header-compact">
+                            <div class="error-item \${error.severity}">
+                                <div class="error-header-compact" onclick="gotoError('\${error.fullPath}', \${error.line})">
                                     <span class="severity-icon">\${severityIcon}</span>
                                     <span class="error-source">[yamllint]</span>
                                     <span class="error-rule-name">\${error.rule}</span>
                                     <span class="error-location-inline">Line \${error.line}\${error.column ? ':\${error.column}' : ''}</span>
                                 </div>
-                                <div class="error-detailed-message">
+                                <div class="error-detailed-message" onclick="gotoError('\${error.fullPath}', \${error.line})">
                                     \${escapeHtml(error.detailedExplanation || error.message)}
                                 </div>
-                                \${error.fixable ? '<div class="fixable-badge">🔧 Auto-fixable</div>' : ''}
+                                <div class="error-actions">
+                                    \${error.fixable ? '<span class="fixable-badge">🔧 Auto-fixable</span>' : ''}
+                                    <span class="ignore-btn" onclick="event.stopPropagation(); ignoreRule('\${error.rule}', 'yamllint')">🚫 Ignore</span>
+                                </div>
                             </div>
                         \`;
                     }
@@ -525,17 +551,19 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                         const severityIcon = error.severity === 'error' ? '❌' : error.severity === 'warning' ? '⚠️' : 'ℹ️';
 
                         html += \`
-                            <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                <div class="error-header-compact">
+                            <div class="error-item \${error.severity}">
+                                <div class="error-header-compact" onclick="gotoError('\${error.fullPath}', \${error.line})">
                                     <span class="severity-icon">\${severityIcon}</span>
                                     <span class="error-source">[pre-commit]</span>
                                     <span class="error-rule-name">\${error.rule}</span>
                                     <span class="error-location-inline">Line \${error.line}\${error.column ? ':\${error.column}' : ''}</span>
                                 </div>
-                                <div class="error-detailed-message">
+                                <div class="error-detailed-message" onclick="gotoError('\${error.fullPath}', \${error.line})">
                                     \${escapeHtml(error.detailedExplanation || error.message)}
                                 </div>
-                                \${error.fixable ? '<div class="fixable-badge">🔧 Auto-fixable</div>' : ''}
+                                <div class="error-actions">
+                                    \${error.fixable ? '<span class="fixable-badge">🔧 Auto-fixable</span>' : ''}
+                                </div>
                             </div>
                         \`;
                     }
@@ -553,17 +581,20 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                         const severityIcon = error.severity === 'error' ? '❌' : error.severity === 'warning' ? '⚠️' : 'ℹ️';
 
                         html += \`
-                            <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                                <div class="error-header-compact">
+                            <div class="error-item \${error.severity}">
+                                <div class="error-header-compact" onclick="gotoError('\${error.fullPath}', \${error.line})">
                                     <span class="severity-icon">\${severityIcon}</span>
                                     <span class="error-source">[ansible-lint]</span>
                                     <span class="error-rule-name">\${error.rule}</span>
                                     <span class="error-location-inline">Line \${error.line}\${error.column ? ':\${error.column}' : ''}</span>
                                 </div>
-                                <div class="error-detailed-message">
+                                <div class="error-detailed-message" onclick="gotoError('\${error.fullPath}', \${error.line})">
                                     \${escapeHtml(error.detailedExplanation || error.message)}
                                 </div>
-                                \${error.fixable ? '<div class="fixable-badge">🔧 Auto-fixable</div>' : ''}
+                                <div class="error-actions">
+                                    \${error.fixable ? '<span class="fixable-badge">🔧 Auto-fixable</span>' : ''}
+                                    <span class="ignore-btn" onclick="event.stopPropagation(); ignoreRule('\${error.rule}', 'ansible-lint')">🚫 Ignore</span>
+                                </div>
                             </div>
                         \`;
                     }
@@ -572,21 +603,22 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                 // Ошибки без группы
                 for (const error of otherErrors) {
                     const severityIcon = error.severity === 'error' ? '❌' : error.severity === 'warning' ? '⚠️' : 'ℹ️';
-                    const severityBadge = error.severity.toUpperCase();
 
                     html += \`
-                        <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                            <div class="error-header-full">
+                        <div class="error-item \${error.severity}">
+                            <div class="error-header-compact" onclick="gotoError('\${error.fullPath}', \${error.line})">
                                 <span class="severity-icon">\${severityIcon}</span>
-                                <span class="severity-badge severity-\${error.severity}">\${severityBadge}</span>
                                 <span class="error-source">[\${error.source}]</span>
                                 <span class="error-rule-name">\${error.rule}</span>
                                 <span class="error-location-inline">Line \${error.line}\${error.column ? ':\${error.column}' : ''}</span>
                             </div>
-                            <div class="error-detailed-message">
+                            <div class="error-detailed-message" onclick="gotoError('\${error.fullPath}', \${error.line})">
                                 \${escapeHtml(error.detailedExplanation || error.message)}
                             </div>
-                            \${error.fixable ? '<div class="fixable-badge">🔧 Auto-fixable</div>' : ''}
+                            <div class="error-actions">
+                                \${error.fixable ? '<span class="fixable-badge">🔧 Auto-fixable</span>' : ''}
+                                <span class="ignore-btn" onclick="event.stopPropagation(); ignoreRule('\${error.rule}', '\${error.source}')">🚫 Ignore</span>
+                            </div>
                         </div>
                     \`;
                 }
@@ -627,6 +659,14 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         function refresh() {
             vscode.postMessage({
                 type: 'refresh'
+            });
+        }
+
+        function ignoreRule(rule, source) {
+            vscode.postMessage({
+                type: 'ignoreRule',
+                rule: rule,
+                source: source
             });
         }
 

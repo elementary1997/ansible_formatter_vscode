@@ -95,6 +95,21 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically fix issues when saving files"
+        },
+        "ansible-lint.enableYamllint": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable yamllint checks"
+        },
+        "ansible-lint.enablePreCommit": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable pre-commit checks"
+        },
+        "ansible-lint.enableAnsibleLint": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable ansible-lint checks"
         }
       }
     },
