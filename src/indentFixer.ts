@@ -363,7 +363,9 @@ export class IndentFixer {
             }
 
             const fixedText = fs.readFileSync(tempFilePath, 'utf-8');
-            console.log(`[IndentFixer] Read fixed text, length: ${fixedText.length}`);
+            console.log(`[IndentFixer] Original text length: ${text.length}`);
+            console.log(`[IndentFixer] Fixed text length: ${fixedText.length}`);
+            console.log(`[IndentFixer] Returning FULL fixed file from ansible-lint`);
             return fixedText;
         } finally {
             if (fs.existsSync(tempFilePath)) {
@@ -439,20 +441,30 @@ export class IndentFixer {
             // Read back the file
             const fixedFullText = fs.readFileSync(tempFilePath, 'utf-8');
 
-            // Extract the selection
-            const startPos = activeEditor.selection.start;
-            const endPos = activeEditor.selection.end;
+            // Check if there's a selection
+            const hasSelection = !activeEditor.selection.isEmpty;
+            
+            console.log(`[IndentFixer] Selection: ${hasSelection ? 'YES' : 'NO'}`);
+            console.log(`[IndentFixer] Original text length: ${text.length}`);
+            console.log(`[IndentFixer] Fixed text length: ${fixedFullText.length}`);
 
-            const fixedLines = fixedFullText.split(/\r?\n/);
-
-            if (endPos.line < fixedLines.length) {
-                const selectedFixedLines = fixedLines.slice(startPos.line, endPos.line + 1);
-                console.log(`[IndentFixer] Returning fixed text from pre-commit`);
-                return selectedFixedLines.join('\n');
-            } else {
-                console.log(`[IndentFixer] Line range issue, falling back to internal fixer`);
-                return this.fixText(text);
+            if (hasSelection) {
+                // Return only the fixed selection
+                const startPos = activeEditor.selection.start;
+                const endPos = activeEditor.selection.end;
+                const fixedLines = fixedFullText.split(/\r?\n/);
+                
+                if (endPos.line < fixedLines.length) {
+                    const selectedFixedLines = fixedLines.slice(startPos.line, endPos.line + 1);
+                    const result = selectedFixedLines.join('\n');
+                    console.log(`[IndentFixer] Returning fixed SELECTION (${result.length} chars)`);
+                    return result;
+                }
             }
+            
+            // No selection or full file - return entire fixed file
+            console.log(`[IndentFixer] Returning FULL fixed file (${fixedFullText.length} chars)`);
+            return fixedFullText;
 
         } finally {
             if (fs.existsSync(tempFilePath)) {

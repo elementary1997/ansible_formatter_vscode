@@ -53,7 +53,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (editor && (editor.document.languageId === 'yaml' || editor.document.languageId === 'ansible')) {
             refreshDiagnostics(editor.document, diagnosticCollection);
             updateDecorations(editor);
-            previewProvider.update(editor);
+            // previewProvider.update(editor); // REMOVED: panel updates only on open or manual refresh
         }
     });
 
@@ -158,8 +158,9 @@ function updateDecorations(editor: vscode.TextEditor) {
 function refreshDiagnostics(document: vscode.TextDocument, collection: vscode.DiagnosticCollection) {
     const diagnostics: vscode.Diagnostic[] = [];
 
-    // Simple heuristic validation
-    // 1. Indentation should be multiple of 2 spaces (standard Ansible/YAML practice)
+    // MINIMAL validation - only critical syntax errors
+    // All style and best practice checks are done by external tools (yamllint, ansible-lint)
+    // shown in the extension panel
 
     for (let i = 0; i < document.lineCount; i++) {
         const line = document.lineAt(i);
@@ -169,21 +170,15 @@ function refreshDiagnostics(document: vscode.TextDocument, collection: vscode.Di
             continue;
         }
 
-        const indentMatch = text.match(/^(\s*)/);
-        const indent = indentMatch ? indentMatch[1].length : 0;
-
-        // Check 1: Even indentation
-        if (indent % 2 !== 0) {
-            const range = new vscode.Range(i, 0, i, indent);
-            const diagnostic = new vscode.Diagnostic(range, 'Indentation should be a multiple of 2 spaces', vscode.DiagnosticSeverity.Warning);
-            diagnostics.push(diagnostic);
-        }
-
-        // Check 2: Tab usage (YAML forbids tabs)
+        // Only check for tabs (YAML forbids tabs - this is a syntax error)
         if (text.includes('\t')) {
             const tabIndex = text.indexOf('\t');
             const range = new vscode.Range(i, tabIndex, i, tabIndex + 1);
-            const diagnostic = new vscode.Diagnostic(range, 'YAML forbids tabs. Use spaces.', vscode.DiagnosticSeverity.Error);
+            const diagnostic = new vscode.Diagnostic(
+                range, 
+                'YAML forbids tabs. Use spaces. (Run yamllint for full validation)', 
+                vscode.DiagnosticSeverity.Error
+            );
             diagnostics.push(diagnostic);
         }
     }
