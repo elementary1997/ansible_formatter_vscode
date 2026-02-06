@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
   <!-- Shield outline -->
   <path fill="#808080" d="M8 0L1 3v5c0 4 3 7 7 9 4-2 7-5 7-9V3L8 0zm0 2l5 2v4c0 3-2 5-5 7-3-2-5-4-5-7V4l5-2z"/>
-  <!-- Letter A - меньше и пропорциональнее -->
-  <path fill="#FF0000" d="M8 5L5.5 12h1.2l.5-1.2h1.6l.5 1.2h1.2L8 5zm0 2l.6 2.5H7.4L8 7z"/>
+  <!-- Letter A - чуть выше -->
+  <path fill="#FF0000" d="M8 4L5.5 11h1.2l.5-1.2h1.6l.5 1.2h1.2L8 4zm0 2l.6 2.5H7.4L8 6z"/>
 </svg>
