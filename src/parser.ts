@@ -4,6 +4,7 @@
 
 import * as path from 'path';
 import { LintError, LintResult } from './models/lintError';
+import { stripAnsiCodes } from './utils';
 
 export class Parser {
     
@@ -19,6 +20,9 @@ export class Parser {
         if (!stdout || stdout.trim() === '') {
             return errors;
         }
+        
+        // Очищаем ANSI коды
+        stdout = stripAnsiCodes(stdout);
         
         try {
             const results = JSON.parse(stdout);
@@ -94,6 +98,9 @@ export class Parser {
         if (!stdout || stdout.trim() === '') {
             return errors;
         }
+        
+        // Очищаем ANSI коды
+        stdout = stripAnsiCodes(stdout);
         
         // PEP8 format: filename:line:column: [rule] message
         // Example: main.yml:12:1: [yaml[trailing-spaces]] Trailing spaces
@@ -181,17 +188,37 @@ export class Parser {
             return errors;
         }
         
+        // Очищаем ANSI коды
+        stdout = stripAnsiCodes(stdout);
+        
+        console.log('[Parser] Pre-commit output:', stdout);
+        
         const lines = stdout.split('\n');
         let currentFile = '';
+        let currentHook = '';
         
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             
+            // Формат 0: Название хука и статус
+            // Check for merge conflicts........................................Passed
+            // yamllint.............................................................Failed
+            const hookMatch = line.match(/^(.+?)\.*\s*(Passed|Failed|Skipped)$/);
+            if (hookMatch) {
+                currentHook = hookMatch[1].trim();
+                console.log('[Parser] Hook:', currentHook, 'status:', hookMatch[2]);
+                continue;
+            }
+            
             // Формат 1: Путь к файлу (начало блока ошибок)
             // test_extension/main.yml
-            if (line && !line.startsWith(' ') && (line.endsWith('.yml') || line.endsWith('.yaml'))) {
-                currentFile = line.trim();
-                continue;
+            if (line && !line.startsWith(' ') && !line.startsWith('-') && (line.endsWith('.yml') || line.endsWith('.yaml') || line.includes('.yml:') || line.includes('.yaml:'))) {
+                const fileMatch = line.match(/^([^:]+\.(yml|yaml))/);
+                if (fileMatch) {
+                    currentFile = fileMatch[1].trim();
+                    console.log('[Parser] Found file:', currentFile);
+                    continue;
+                }
             }
             
             // Формат 2: Ошибки yamllint
@@ -200,6 +227,8 @@ export class Parser {
             if (yamlLintMatch && currentFile) {
                 const [, lineNum, col, severity, message, , rule] = yamlLintMatch;
                 const filePath = path.isAbsolute(currentFile) ? currentFile : path.join(workspaceRoot, currentFile);
+                
+                console.log('[Parser] yamllint error:', {lineNum, col, severity, message, rule});
                 
                 errors.push({
                     file: filePath,
@@ -222,6 +251,8 @@ export class Parser {
                 const [, file, lineNum, col, rule, message] = ansibleMatch;
                 const filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
                 
+                console.log('[Parser] ansible-lint error:', {file, lineNum, col, rule, message});
+                
                 errors.push({
                     file: filePath,
                     line: parseInt(lineNum, 10),
@@ -233,8 +264,39 @@ export class Parser {
                     fixable: this.isFixable(rule),
                     documentationUrl: this.getDocumentationUrl(rule)
                 });
+                continue;
+            }
+            
+            // Формат 4: Ошибки trailing-whitespace и других хуков
+            // Файл с trailing-whitespace (но без указания строки)
+            if (line.startsWith('-') || (currentFile && line.trim() === '')) {
+                continue;
+            }
+            
+            // Формат 5: Загрузка failed в формате ansible-lint
+            // load-failure: Failed to load or parse file
+            const loadMatch = line.match(/^([a-z-]+):\s*(.+)$/i);
+            if (loadMatch && currentFile && currentHook.toLowerCase().includes('ansible')) {
+                const [, rule, message] = loadMatch;
+                const filePath = path.isAbsolute(currentFile) ? currentFile : path.join(workspaceRoot, currentFile);
+                
+                console.log('[Parser] load error:', {rule, message});
+                
+                errors.push({
+                    file: filePath,
+                    line: 1,
+                    column: 1,
+                    rule: rule.trim(),
+                    message: message.trim(),
+                    severity: 'error',
+                    source: 'pre-commit',
+                    fixable: false,
+                    documentationUrl: this.getDocumentationUrl(rule)
+                });
             }
         }
+        
+        console.log('[Parser] Total pre-commit errors found:', errors.length);
         
         return errors;
     }
@@ -279,15 +341,18 @@ export class Parser {
         workspaceRoot: string,
         format?: 'json' | 'pep8' | 'pre-commit'
     ): LintError[] {
-        if (!result.stdout || result.stdout.trim() === '') {
+        // Комбинируем stdout и stderr для более полной информации
+        const output = (result.stdout || '') + '\n' + (result.stderr || '');
+        
+        if (!output || output.trim() === '') {
             return [];
         }
         
         // Автоопределение формата если не указан
         if (!format) {
-            if (result.stdout.trim().startsWith('[') || result.stdout.trim().startsWith('{')) {
+            if (output.trim().startsWith('[') || output.trim().startsWith('{')) {
                 format = 'json';
-            } else if (result.stdout.includes('hook:')) {
+            } else if (output.includes('Passed') || output.includes('Failed') || output.includes('Skipped')) {
                 format = 'pre-commit';
             } else {
                 format = 'pep8';
@@ -298,13 +363,13 @@ export class Parser {
         
         switch (format) {
             case 'json':
-                errors = this.parseAnsibleLintJson(result.stdout, workspaceRoot);
+                errors = this.parseAnsibleLintJson(output, workspaceRoot);
                 break;
             case 'pep8':
-                errors = this.parseAnsibleLintPep8(result.stdout, workspaceRoot);
+                errors = this.parseAnsibleLintPep8(output, workspaceRoot);
                 break;
             case 'pre-commit':
-                errors = this.parsePreCommit(result.stdout, workspaceRoot);
+                errors = this.parsePreCommit(output, workspaceRoot);
                 break;
         }
         
