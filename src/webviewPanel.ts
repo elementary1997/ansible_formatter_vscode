@@ -222,22 +222,19 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             padding: 1px 0;
         }
 
-        .lang-badge {
+        .lang-label {
             flex-shrink: 0;
-            font-size: 0.65em;
+            font-size: 0.7em;
             font-weight: bold;
-            padding: 1px 4px;
-            border-radius: 3px;
+            opacity: 0.7;
         }
 
-        .lang-badge.eng {
-            background: #2563eb;
-            color: #fff;
+        .lang-label.eng {
+            color: #60a5fa;
         }
 
-        .lang-badge.ru {
-            background: #dc2626;
-            color: #fff;
+        .lang-label.ru {
+            color: #f87171;
         }
 
         .error-group {
@@ -671,8 +668,8 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                             <span class="error-location-inline">Line \${error.line}\${error.column ? ':' + error.column : ''}</span>
                         </div>
                         <div class="error-messages" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                            <div class="error-lang-line"><span class="lang-badge eng">ENG</span> \${escapeHtml(error.message)}</div>
-                            \${error.detailedExplanation && error.detailedExplanation !== error.message ? '<div class="error-lang-line"><span class="lang-badge ru">RU</span> ' + escapeHtml(error.detailedExplanation) + '</div>' : ''}
+                            <div class="error-lang-line"><span class="lang-label eng">EN:</span> \${escapeHtml(error.message)}</div>
+                            \${error.detailedExplanation ? '<div class="error-lang-line"><span class="lang-label ru">RU:</span> ' + escapeHtml(error.detailedExplanation) + '</div>' : ''}
                         </div>
                         <div class="error-actions">
                             \${error.fixable ? '<span class="fixable-badge">🔧 Auto-fixable</span>' : ''}
