@@ -1,0 +1,64 @@
+{
+  "name": "yaml-indent-visualizer",
+  "displayName": "YAML Indent Visualizer & Best Practices",
+  "description": "Visualizes parent key hierarchy, checks best practices with yamllint/ansible-lint, and auto-fixes indentation for YAML and Ansible files.",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:yaml",
+    "onLanguage:ansible",
+    "onView:yamlIndentVisualizer.preview"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "YAML Indent Visualizer",
+      "properties": {
+        "yamlIndentVisualizer.highlightColor": {
+          "type": "string",
+          "default": "rgba(255, 215, 0, 0.3)",
+          "description": "Background color for highlighted parent keys."
+        },
+        "yamlIndentVisualizer.showRuler": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a subtle ruler line from parent to child."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "yaml-indent-explorer",
+          "title": "YAML Indent",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "yaml-indent-explorer": [
+        {
+          "type": "webview",
+          "id": "yamlIndentVisualizer.preview",
+          "name": "Indent Preview"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.60.0",
+    "@types/node": "^14.14.37",
+    "typescript": "^4.1.5"
+  }
+}

@@ -1,0 +1,11 @@
+node_modules/
+out/
+.vscode-test/
+*.vsix
+.DS_Store
+.temp_*
+*.log
+
+# Temp files from fixer
+.temp_fix_*
+.temp_lint_*

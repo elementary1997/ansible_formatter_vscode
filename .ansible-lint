@@ -1,0 +1,20 @@
+---
+# Профиль production обеспечивает строгие требования best practices
+profile: production
+
+# Исключаемые пути
+exclude_paths:
+  - .cache/
+  - .github/
+  - venv/
+  - node_modules/
+  - out/
+
+# Правила, которые будут выдавать только предупреждения
+warn_list:
+  - command-instead-of-module
+  - command-instead-of-shell
+
+# Пропускаемые правила (опционально)
+# skip_list:
+#   - yaml

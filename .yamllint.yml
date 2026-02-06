@@ -1,0 +1,30 @@
+---
+extends: default
+
+rules:
+  line-length:
+    max: 260
+  truthy:
+    allowed-values: ["true", "false", "yes", "no"]
+    check-keys: true
+  comments:
+    min-spaces-from-content: 1
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+  # Строгие правила для отступов
+  brackets:
+    max-spaces-inside: 1
+  colons:
+    max-spaces-after: 1
+    max-spaces-before: 0
+  commas:
+    max-spaces-after: 1
+    min-spaces-after: 1
+  hyphens:
+    max-spaces-after: 1
+  # Проверка пустых значений
+  empty-values:
+    forbid-in-block-mappings: true
+    forbid-in-flow-mappings: true
