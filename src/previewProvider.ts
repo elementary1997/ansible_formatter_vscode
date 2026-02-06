@@ -118,9 +118,15 @@ export class IndentPreviewProvider implements vscode.WebviewViewProvider {
                 }
 
                 // Show formatting results
-                resultsHtml += '<h3>📝 Форматирование</h3>';
+                resultsHtml += '<h3>📝 Автоисправление</h3>';
                 if (fixed === text) {
-                    resultsHtml += `<p style="color: green;">✔ Отступы в порядке!</p>`;
+                    resultsHtml += `<p style="color: orange;">⚠️ Автоматическое исправление не доступно или не сработало.</p>
+                                   <p style="color: gray;">Используйте инструменты вручную:</p>
+                                   <pre style="font-size: 10px;">
+# В терминале:
+pre-commit run --files file.yml
+ansible-lint --fix file.yml
+yamllint --strict file.yml</pre>`;
                 } else {
                     // Calculate range for entire document
                     const lastLine = editor.document.lineCount - 1;

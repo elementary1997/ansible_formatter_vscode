@@ -218,71 +218,98 @@ export class IndentFixer {
         const document = activeEditor.document;
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
 
-        // 1. Check for pre-commit config (опциональная функция)
-        let hasPreCommit = false;
-        let preCommitAvailable = false;
-        
-        if (workspaceFolder) {
-            const configPath = path.join(workspaceFolder.uri.fsPath, '.pre-commit-config.yaml');
-            if (fs.existsSync(configPath)) {
-                hasPreCommit = true;
-                console.log(`[IndentFixer] Found pre-commit config at: ${configPath}`);
-                
-                // Проверяем что pre-commit установлен
-                try {
-                    await new Promise<void>((resolve, reject) => {
-                        cp.exec('pre-commit --version', (error) => {
-                            if (error) {
-                                reject(error);
-                            } else {
-                                resolve();
-                            }
-                        });
-                    });
-                    preCommitAvailable = true;
-                    console.log('[IndentFixer] pre-commit is available');
-                } catch {
-                    console.log('[IndentFixer] pre-commit not found, will use internal fixer');
-                }
-            } else {
-                console.log(`[IndentFixer] No pre-commit config found, using internal fixer`);
-            }
-        } else {
-            console.log('[IndentFixer] No workspace folder found');
+        if (!workspaceFolder) {
+            vscode.window.showErrorMessage('Workspace folder not found. Cannot auto-fix without workspace.');
+            return text;
         }
-        
-        hasPreCommit = hasPreCommit && preCommitAvailable;
 
-        if (hasPreCommit && workspaceFolder) {
+        const rootPath = workspaceFolder.uri.fsPath;
+
+        // СТРАТЕГИЯ АВТОИСПРАВЛЕНИЯ:
+        // 1. Попробовать pre-commit (если есть конфиг)
+        // 2. Попробовать ansible-lint --fix
+        // 3. Попробовать prettier/yamlfmt
+        // 4. Показать ошибки и предложить исправить вручную
+
+        // 1. Pre-commit (лучший вариант)
+        const hasPreCommitConfig = fs.existsSync(path.join(rootPath, '.pre-commit-config.yaml'));
+        if (hasPreCommitConfig) {
             try {
-                console.log('[IndentFixer] Attempting to run pre-commit...');
-                const preCommitResult = await this.runPreCommit(text, activeEditor, workspaceFolder.uri.fsPath);
-                // If pre-commit returned the same text, it might mean the hook didn't run or passed.
-                // But the user *requested* a fix (specifically looking at the preview).
-                // If our internal fixer thinks it needs fixing, maybe we should offer that?
-                // OR, simpler: if pre-commit failed to fix it (result == input), try internal.
+                console.log('[IndentFixer] Trying pre-commit...');
+                const preCommitResult = await this.runPreCommit(text, activeEditor, rootPath);
                 if (preCommitResult !== text) {
-                    console.log('[IndentFixer] Pre-commit made changes, using result');
+                    console.log('[IndentFixer] ✅ Pre-commit fixed the file');
                     return preCommitResult;
                 }
-                console.log('[IndentFixer] Pre-commit made no changes, falling back to internal fixer.');
-            } catch (err) {
-                console.error('[IndentFixer] Pre-commit execution failed, falling back to internal fixer:', err);
-                // Показываем предупреждение так как pre-commit должен быть установлен
+            } catch (err: any) {
+                console.error('[IndentFixer] Pre-commit failed:', err);
                 vscode.window.showWarningMessage(
-                    'Pre-commit не работает. Убедитесь что он установлен: pip3 install --user pre-commit',
-                    'Установить'
+                    `Pre-commit не сработал: ${err.message}`,
+                    'Показать логи'
                 ).then(choice => {
-                    if (choice === 'Установить') {
-                        vscode.commands.executeCommand('workbench.action.terminal.new');
+                    if (choice === 'Показать логи') {
+                        vscode.window.showInformationMessage(err.message);
                     }
                 });
             }
         }
 
-        // Fallback or if no pre-commit configuration matches
-        console.log('[IndentFixer] Using internal fixer');
-        return this.fixText(text);
+        // 2. ansible-lint --fix
+        try {
+            console.log('[IndentFixer] Trying ansible-lint --fix...');
+            const ansibleLintResult = await this.runAnsibleLintFix(text, document.fileName, rootPath);
+            if (ansibleLintResult !== text) {
+                console.log('[IndentFixer] ✅ ansible-lint fixed the file');
+                return ansibleLintResult;
+            }
+        } catch (err: any) {
+            console.log('[IndentFixer] ansible-lint --fix not available:', err.message);
+        }
+
+        // 3. Показываем что не смогли исправить автоматически
+        vscode.window.showWarningMessage(
+            'Не удалось автоматически исправить. Используйте yamllint/ansible-lint вручную или исправьте по ошибкам выше.',
+            'Открыть терминал'
+        ).then(choice => {
+            if (choice === 'Открыть терминал') {
+                const terminal = vscode.window.createTerminal('YAML Fix');
+                terminal.show();
+                terminal.sendText(`# Исправьте вручную:\n# yamllint --strict ${document.fileName}\n# ansible-lint ${document.fileName}`);
+            }
+        });
+
+        return text; // Возвращаем без изменений
+    }
+
+    private static async runAnsibleLintFix(text: string, fileName: string, rootPath: string): Promise<string> {
+        const tempFileName = `.temp_fix_${Date.now()}${path.extname(fileName)}`;
+        const tempFilePath = path.join(rootPath, tempFileName);
+
+        fs.writeFileSync(tempFilePath, text);
+
+        try {
+            await new Promise<void>((resolve, reject) => {
+                cp.exec(`ansible-lint --fix "${tempFileName}"`, { cwd: rootPath }, (error, stdout, stderr) => {
+                    // ansible-lint --fix возвращает 0 если исправил
+                    if (error && error.code !== 0 && error.code !== 2) {
+                        reject(new Error(`ansible-lint failed: ${stderr || error.message}`));
+                        return;
+                    }
+                    resolve();
+                });
+            });
+
+            if (!fs.existsSync(tempFilePath)) {
+                throw new Error('File disappeared after ansible-lint');
+            }
+
+            const fixedText = fs.readFileSync(tempFilePath, 'utf-8');
+            return fixedText;
+        } finally {
+            if (fs.existsSync(tempFilePath)) {
+                fs.unlinkSync(tempFilePath);
+            }
+        }
     }
 
     private static async runPreCommit(text: string, activeEditor: vscode.TextEditor, rootPath: string): Promise<string> {
@@ -360,10 +387,19 @@ export class IndentFixer {
     }
 
     /**
-     * ПРАВИЛЬНЫЙ алгоритм исправления отступов для YAML/Ansible.
-     * Парсит структуру и правильно расставляет отступы по стандартам Ansible.
+     * Fallback алгоритм - используется только если pre-commit не сработал.
+     * В идеале всегда должен использоваться pre-commit/yamllint!
      */
     public static fixText(text: string): string {
+        // Простейший fallback - возвращаем как есть
+        // Все исправления должны делать профессиональные инструменты!
+        return text;
+    }
+
+    /**
+     * УСТАРЕВШИЙ fallback алгоритм - не используется
+     */
+    private static fixTextLegacy(text: string): string {
         const lines = text.split(/\r?\n/);
         if (lines.length === 0) {
             return text;
