@@ -10,13 +10,18 @@ import { CodeActionsProvider, ignoreRule } from './codeActionsProvider';
 import { WebviewPanel } from './webviewPanel';
 import { AnsibleLintFixer } from './ansibleLintFixer';
 import { QuickFixer } from './quickFixer';
+import { LintError } from './models/lintError';
 
 let diagnosticsProvider: DiagnosticsProvider;
 let webviewPanel: WebviewPanel;
 let statusBarItem: vscode.StatusBarItem;
+let extensionContext: vscode.ExtensionContext;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Ansible Lint Helper is now active!');
+
+    // Сохраняем контекст для доступа к workspaceState
+    extensionContext = context;
 
     // Инициализация провайдеров
     diagnosticsProvider = new DiagnosticsProvider();
@@ -103,8 +108,12 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         webviewPanel.onDidClear(() => {
             diagnosticsProvider.clear();
+            clearSavedState();
         })
     );
+
+    // Восстанавливаем сохраненное состояние
+    restoreSavedState();
 
     // Auto-fix on save (если включено в настройках)
     context.subscriptions.push(
@@ -215,6 +224,9 @@ async function runAnsibleLintOnCurrentFile(): Promise<void> {
             diagnosticsProvider.updateDiagnostics(allErrors);
             webviewPanel.updateErrors(allErrors);
 
+            // Сохраняем состояние для восстановления после перезапуска
+            saveState(allErrors);
+
             progress.report({ increment: 100 });
 
             // Показываем статистику
@@ -315,6 +327,9 @@ async function runAnsibleLintOnAllFiles(): Promise<void> {
             diagnosticsProvider.updateDiagnostics(allErrors);
             webviewPanel.updateErrors(allErrors);
 
+            // Сохраняем состояние для восстановления после перезапуска
+            saveState(allErrors);
+
             progress.report({ increment: 100 });
 
             // Показываем статистику
@@ -377,6 +392,9 @@ async function runPreCommit(): Promise<void> {
             // Обновляем UI
             diagnosticsProvider.updateDiagnostics(errors);
             webviewPanel.updateErrors(errors);
+
+            // Сохраняем состояние для восстановления после перезапуска
+            saveState(errors);
 
             progress.report({ increment: 100 });
 
@@ -538,5 +556,55 @@ export function deactivate() {
     }
     if (statusBarItem) {
         statusBarItem.dispose();
+    }
+}
+
+/**
+ * Сохранить текущее состояние ошибок
+ */
+function saveState(errors: LintError[]): void {
+    try {
+        // Сохраняем ошибки в workspaceState (персистентное хранилище для workspace)
+        extensionContext.workspaceState.update('lintErrors', errors);
+        console.log('[Extension] State saved:', errors.length, 'errors');
+    } catch (error: any) {
+        console.error('[Extension] Failed to save state:', error.message);
+    }
+}
+
+/**
+ * Восстановить сохраненное состояние
+ */
+function restoreSavedState(): void {
+    try {
+        const savedErrors = extensionContext.workspaceState.get<LintError[]>('lintErrors');
+
+        if (savedErrors && savedErrors.length > 0) {
+            console.log('[Extension] Restoring state:', savedErrors.length, 'errors');
+
+            // Восстанавливаем ошибки в UI
+            diagnosticsProvider.updateDiagnostics(savedErrors);
+            webviewPanel.updateErrors(savedErrors);
+
+            vscode.window.showInformationMessage(
+                `📋 Restored ${savedErrors.length} linting results from previous session`
+            );
+        } else {
+            console.log('[Extension] No saved state to restore');
+        }
+    } catch (error: any) {
+        console.error('[Extension] Failed to restore state:', error.message);
+    }
+}
+
+/**
+ * Очистить сохраненное состояние
+ */
+function clearSavedState(): void {
+    try {
+        extensionContext.workspaceState.update('lintErrors', undefined);
+        console.log('[Extension] Saved state cleared');
+    } catch (error: any) {
+        console.error('[Extension] Failed to clear state:', error.message);
     }
 }
