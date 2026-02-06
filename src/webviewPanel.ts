@@ -113,6 +113,18 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
     }
 
     /**
+     * Обновить масштаб UI
+     */
+    public updateScale(scale: number): void {
+        if (this._view) {
+            this._view.webview.postMessage({
+                type: 'updateScale',
+                scale: scale / 100
+            });
+        }
+    }
+
+    /**
      * Сериализовать ошибки для отправки в webview
      */
     private _serializeErrors(errors: LintError[]): any[] {
@@ -580,6 +592,8 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                 updateErrorsUI(allErrors);
                 // Сохраняем состояние для восстановления
                 vscode.setState({ errors: allErrors, filter: currentFilter });
+            } else if (message.type === 'updateScale') {
+                document.body.style.zoom = message.scale;
             }
         });
 

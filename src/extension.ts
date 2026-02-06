@@ -128,6 +128,17 @@ export function activate(context: vscode.ExtensionContext) {
     // Восстанавливаем сохраненное состояние
     restoreSavedState();
 
+    // Слушаем изменение настроек масштаба
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration('ansible-lint.uiScale')) {
+                const config = vscode.workspace.getConfiguration('ansible-lint');
+                const uiScale = config.get<number>('uiScale', 100);
+                webviewPanel.updateScale(uiScale);
+            }
+        })
+    );
+
     // Auto-fix on save (если включено в настройках)
     context.subscriptions.push(
         vscode.workspace.onDidSaveTextDocument(async (document) => {
