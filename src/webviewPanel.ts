@@ -205,11 +205,30 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 5px 8px;
+            padding: 8px 10px;
             background: var(--vscode-editor-background);
             border-radius: 3px;
             margin-bottom: 5px;
             cursor: pointer;
+            user-select: none;
+        }
+
+        .file-header .collapse-icon {
+            margin-right: 6px;
+            transition: transform 0.2s;
+        }
+
+        .file-header.collapsed .collapse-icon {
+            transform: rotate(-90deg);
+        }
+
+        .file-errors {
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+
+        .file-errors.collapsed {
+            display: none;
         }
 
         .file-header:hover {
@@ -492,14 +511,22 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
 
             // Рендерим ошибки
             let html = '';
+            let fileIndex = 0;
             for (const [file, fileErrors] of Object.entries(errorsByFile)) {
                 const fileName = fileErrors[0].file;
+                const fileId = 'file-' + fileIndex;
+                fileIndex++;
+
                 html += \`
                     <div class="error-group">
-                        <div class="file-header" onclick="fixFile('\${file}')">
-                            <span class="file-name">📁 \${fileName}</span>
+                        <div class="file-header" onclick="toggleFile('\${fileId}')" id="header-\${fileId}">
+                            <div style="display: flex; align-items: center;">
+                                <span class="collapse-icon">▼</span>
+                                <span class="file-name">📁 \${fileName}</span>
+                            </div>
                             <span class="error-count">\${fileErrors.length} issues</span>
                         </div>
+                        <div class="file-errors" id="\${fileId}">
                 \`;
 
                 // Группируем по checkGroup
@@ -623,10 +650,20 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                     \`;
                 }
 
-                html += '</div>';
+                html += '</div></div>'; // Закрываем file-errors и error-group
             }
 
             container.innerHTML = html;
+        }
+
+        function toggleFile(fileId) {
+            const errorsDiv = document.getElementById(fileId);
+            const headerDiv = document.getElementById('header-' + fileId);
+
+            if (errorsDiv && headerDiv) {
+                errorsDiv.classList.toggle('collapsed');
+                headerDiv.classList.toggle('collapsed');
+            }
         }
 
         function gotoError(file, line) {
