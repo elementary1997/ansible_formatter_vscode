@@ -362,15 +362,24 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                 \`;
                 
                 for (const error of fileErrors) {
-                    html += \`
-                        <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                            <div class="error-header">
-                                <span class="error-location">Line \${error.line}</span>
-                                <span class="error-rule">[\${error.rule}]</span>
+                    // Разделитель отображаем отдельно
+                    if (error.rule === 'separator') {
+                        html += \`
+                            <div style="padding: 10px 12px; margin: 10px 0; font-weight: bold; color: var(--vscode-descriptionForeground); border-top: 2px solid var(--vscode-panel-border); border-bottom: 2px solid var(--vscode-panel-border);">
+                                \${escapeHtml(error.message)}
                             </div>
-                            <div class="error-message">\${escapeHtml(error.message)}</div>
-                        </div>
-                    \`;
+                        \`;
+                    } else {
+                        html += \`
+                            <div class="error-item \${error.severity}" onclick="gotoError('\${error.fullPath}', \${error.line})">
+                                <div class="error-header">
+                                    <span class="error-location">Line \${error.line}</span>
+                                    <span class="error-rule">[\${error.rule}]</span>
+                                </div>
+                                <div class="error-message">\${escapeHtml(error.message)}</div>
+                            </div>
+                        \`;
+                    }
                 }
                 
                 html += '</div>';

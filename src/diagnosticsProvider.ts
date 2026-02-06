@@ -41,7 +41,10 @@ export class DiagnosticsProvider {
      * Создать VSCode Diagnostics из LintError
      */
     private createDiagnostics(errors: LintError[]): vscode.Diagnostic[] {
-        return errors.map(error => this.createDiagnostic(error));
+        // Фильтруем разделители
+        return errors
+            .filter(error => error.rule !== 'separator')
+            .map(error => this.createDiagnostic(error));
     }
     
     /**

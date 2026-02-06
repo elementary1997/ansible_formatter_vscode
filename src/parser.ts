@@ -181,50 +181,58 @@ export class Parser {
             return errors;
         }
         
-        // pre-commit output format:
-        // hook-name....Failed
-        // - hook: ansible-lint
-        //   files: main.yml
-        //   
-        // Затем может быть вывод самого хука
-        
         const lines = stdout.split('\n');
         let currentFile = '';
-        let inErrorBlock = false;
         
-        for (const line of lines) {
-            // Детектируем файл
-            const fileMatch = line.match(/^-\s+hook:\s+(.+)$/);
-            if (fileMatch) {
-                inErrorBlock = true;
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            
+            // Формат 1: Путь к файлу (начало блока ошибок)
+            // test_extension/main.yml
+            if (line && !line.startsWith(' ') && (line.endsWith('.yml') || line.endsWith('.yaml'))) {
+                currentFile = line.trim();
                 continue;
             }
             
-            const filesMatch = line.match(/^\s+files:\s+(.+)$/);
-            if (filesMatch) {
-                currentFile = filesMatch[1].trim();
+            // Формат 2: Ошибки yamllint
+            // 19:5       error    Syntax error: expected <block end>, but found '?' (syntax)
+            const yamlLintMatch = line.match(/^\s+(\d+):(\d+)\s+(error|warning)\s+(.+?)(\s+\(([^)]+)\))?$/);
+            if (yamlLintMatch && currentFile) {
+                const [, lineNum, col, severity, message, , rule] = yamlLintMatch;
+                const filePath = path.isAbsolute(currentFile) ? currentFile : path.join(workspaceRoot, currentFile);
+                
+                errors.push({
+                    file: filePath,
+                    line: parseInt(lineNum, 10),
+                    column: parseInt(col, 10),
+                    rule: rule || 'yamllint',
+                    message: message.trim(),
+                    severity: severity === 'error' ? 'error' : 'warning',
+                    source: 'pre-commit',
+                    fixable: false,
+                    documentationUrl: undefined
+                });
                 continue;
             }
             
-            // Детектируем ошибки в формате ansible-lint
-            if (inErrorBlock && line.includes(':')) {
-                const errorMatch = line.match(/^(.+?):(\d+):(\d+):\s*\[?([^\]]+)\]?\s*(.+)$/);
-                if (errorMatch) {
-                    const [, file, lineNum, col, rule, message] = errorMatch;
-                    const filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
-                    
-                    errors.push({
-                        file: filePath,
-                        line: parseInt(lineNum, 10),
-                        column: parseInt(col, 10),
-                        rule: rule.trim(),
-                        message: message.trim(),
-                        severity: 'warning',
-                        source: 'pre-commit',
-                        fixable: this.isFixable(rule),
-                        documentationUrl: this.getDocumentationUrl(rule)
-                    });
-                }
+            // Формат 3: Стандартный формат ansible-lint в pre-commit
+            // main.yml:12:1: [yaml[trailing-spaces]] Trailing spaces
+            const ansibleMatch = line.match(/^(.+?):(\d+):(\d+):\s*\[?([^\]]+)\]?\s*(.+)$/);
+            if (ansibleMatch) {
+                const [, file, lineNum, col, rule, message] = ansibleMatch;
+                const filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
+                
+                errors.push({
+                    file: filePath,
+                    line: parseInt(lineNum, 10),
+                    column: parseInt(col, 10),
+                    rule: rule.trim(),
+                    message: message.trim(),
+                    severity: 'warning',
+                    source: 'pre-commit',
+                    fixable: this.isFixable(rule),
+                    documentationUrl: this.getDocumentationUrl(rule)
+                });
             }
         }
         

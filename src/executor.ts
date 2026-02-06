@@ -115,7 +115,9 @@ export class Executor {
             const pathSeparator = isWindows ? ';' : ':';
             const env = {
                 ...process.env,
-                PATH: `${extraPaths.join(pathSeparator)}${pathSeparator}${process.env.PATH}`
+                PATH: `${extraPaths.join(pathSeparator)}${pathSeparator}${process.env.PATH}`,
+                NO_COLOR: '1',  // Отключаем цвета для всех команд
+                TERM: 'dumb'    // Отключаем ANSI escape коды
             };
             
             const startTime = Date.now();
