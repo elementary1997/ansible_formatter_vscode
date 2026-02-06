@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { QuickFixer } from './quickFixer';
 import { LintError } from './models/lintError';
+import { getLastCheckType } from './extension';
 
 export class CodeActionsProvider implements vscode.CodeActionProvider {
 
@@ -215,8 +216,13 @@ export async function ignoreRule(rule: string, source?: string): Promise<void> {
             await ignoreAnsibleLintRule(workspaceRoot, rule);
         }
 
-        // Перезапускаем проверку чтобы ошибка исчезла из списка
-        await vscode.commands.executeCommand('ansible-lint.run');
+        // Перезапускаем проверку того же типа что была до этого
+        const checkType = getLastCheckType();
+        if (checkType === 'all') {
+            await vscode.commands.executeCommand('ansible-lint.runAll');
+        } else {
+            await vscode.commands.executeCommand('ansible-lint.run');
+        }
 
     } catch (error: any) {
         vscode.window.showErrorMessage(`Failed to update config: ${error.message}`);
