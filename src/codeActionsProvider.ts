@@ -109,7 +109,7 @@ export class CodeActionsProvider implements vscode.CodeActionProvider {
         action.command = {
             command: 'ansible-lint.fixWithTool',
             title: 'Fix with ansible-lint',
-            arguments: [document]
+            arguments: [document.uri.toString()]
         };
         action.diagnostics = [diagnostic];
         

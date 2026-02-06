@@ -334,8 +334,15 @@ async function fixCurrentFile(): Promise<void> {
 /**
  * Исправить с помощью ansible-lint --fix
  */
-async function fixWithTool(document?: vscode.TextDocument): Promise<void> {
-    if (!document) {
+async function fixWithTool(uriString?: string): Promise<void> {
+    let document: vscode.TextDocument;
+    
+    if (uriString) {
+        // URI передан из Code Action
+        const uri = vscode.Uri.parse(uriString);
+        document = await vscode.workspace.openTextDocument(uri);
+    } else {
+        // Вызвано из Command Palette
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
             vscode.window.showErrorMessage('No active editor');
