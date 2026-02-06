@@ -230,11 +230,15 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         }
 
         .lang-label.eng {
-            color: #60a5fa;
+            color: #93c5fd;
         }
 
         .lang-label.ru {
-            color: #f87171;
+            color: #fca5a5;
+        }
+
+        .error-text {
+            color: var(--vscode-editor-foreground);
         }
 
         .error-group {
@@ -288,7 +292,7 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         .error-item {
             padding: 4px 8px;
             margin: 1px 0;
-            background: var(--vscode-editor-background);
+            background: var(--vscode-list-hoverBackground);
             border-left: 3px solid var(--vscode-errorForeground);
             cursor: pointer;
             border-radius: 0 3px 3px 0;
