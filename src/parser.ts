@@ -97,13 +97,23 @@ export class Parser {
         
         // PEP8 format: filename:line:column: [rule] message
         // Example: main.yml:12:1: [yaml[trailing-spaces]] Trailing spaces
+        // Special case for load-failure:
+        //   load-failure[yaml]: Failed to load YAML file (warning)
+        //   main.yml:19:5 did not find expected '-' indicator
         const lines = stdout.split('\n');
         
-        for (const line of lines) {
-            const match = line.match(/^(.+?):(\d+):(\d+):\s*\[?([^\]]+)\]?\s*(.+)$/);
+        let lastRule = '';
+        let lastMessage = '';
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
             
-            if (match) {
-                const [, file, lineNum, col, rule, message] = match;
+            // Формат 1: filename:line:column: [rule] message
+            const match1 = line.match(/^(.+?):(\d+):(\d+):\s*\[?([^\]]+)\]?\s*(.+)$/);
+            
+            if (match1) {
+                const [, file, lineNum, col, rule, message] = match1;
                 const filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
                 
                 errors.push({
@@ -117,6 +127,41 @@ export class Parser {
                     fixable: this.isFixable(rule),
                     documentationUrl: this.getDocumentationUrl(rule)
                 });
+                continue;
+            }
+            
+            // Формат 2: rule[type]: message (warning/error)
+            const match2 = line.match(/^([a-z-]+)\[([^\]]+)\]:\s*(.+?)\s*\((warning|error)\)$/i);
+            
+            if (match2) {
+                const [, ruleName, ruleType, message] = match2;
+                lastRule = `${ruleName}[${ruleType}]`;
+                lastMessage = message.trim();
+                continue;
+            }
+            
+            // Формат 3: filename:line:column details (следует за правилом)
+            const match3 = line.match(/^(.+?):(\d+):(\d+)\s+(.+)$/);
+            
+            if (match3 && lastRule) {
+                const [, file, lineNum, col, details] = match3;
+                const filePath = path.isAbsolute(file) ? file : path.join(workspaceRoot, file);
+                
+                errors.push({
+                    file: filePath,
+                    line: parseInt(lineNum, 10),
+                    column: parseInt(col, 10),
+                    rule: lastRule,
+                    message: `${lastMessage}: ${details.trim()}`,
+                    severity: 'warning',
+                    source: 'ansible-lint',
+                    fixable: this.isFixable(lastRule),
+                    documentationUrl: this.getDocumentationUrl(lastRule)
+                });
+                
+                lastRule = '';
+                lastMessage = '';
+                continue;
             }
         }
         
