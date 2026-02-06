@@ -13,6 +13,8 @@ rules:
   comments:
     min-spaces-from-content: 1
   
+  comments-indentation: disable  # Required by ansible-lint
+  
   indentation:
     spaces: 2
     indent-sequences: true
@@ -20,7 +22,7 @@ rules:
   
   brackets:
     min-spaces-inside: 0
-    max-spaces-inside: 0
+    max-spaces-inside: 1  # Required by ansible-lint (must be 1)
   
   colons:
     max-spaces-before: 0
@@ -37,5 +39,9 @@ rules:
   empty-values:
     forbid-in-block-mappings: false
     forbid-in-flow-mappings: true
+  
+  octal-values:
+    forbid-implicit-octal: true  # Required by ansible-lint
+    forbid-explicit-octal: true  # Required by ansible-lint
   
   key-duplicates: enable

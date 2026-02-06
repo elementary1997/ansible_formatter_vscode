@@ -22,3 +22,4 @@ repos:
       - id: ansible-lint
         files: \.(yaml|yml)$
         args: [--strict]
+        language_version: python3.11  # Use available Python version
