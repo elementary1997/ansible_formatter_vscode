@@ -121,7 +121,21 @@ export class IndentFixer {
 
     private static async runCommand(command: string, cwd: string): Promise<string> {
         return new Promise((resolve, reject) => {
-            cp.exec(command, { cwd, timeout: 30000 }, (error, stdout, stderr) => {
+            // Добавляем пути для поиска линтеров
+            const extraPaths = [
+                `${process.env.HOME}/.local/bin`,
+                `${cwd}/venv/bin`,
+                `${cwd}/../venv/bin`,
+                '/usr/local/bin',
+                '/usr/bin'
+            ].filter(p => p).join(':');
+            
+            const env = {
+                ...process.env,
+                PATH: `${extraPaths}:${process.env.PATH}`
+            };
+            
+            cp.exec(command, { cwd, timeout: 30000, env }, (error, stdout, stderr) => {
                 // Exit codes:
                 // 0 - success, no issues
                 // 1 - linter found issues (this is OK, we want to see them)

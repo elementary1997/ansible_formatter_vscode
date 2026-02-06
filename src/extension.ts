@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as cp from 'child_process';
 import { IndentPreviewProvider } from './previewProvider';
 
 let parentKeyDecorationType: vscode.TextEditorDecorationType;
@@ -6,6 +7,9 @@ let diagnosticCollection: vscode.DiagnosticCollection;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('YAML Indent Visualizer is now active!');
+
+    // Проверяем и устанавливаем зависимости
+    checkAndInstallDependencies(context);
 
     // Initialize decoration type
     updateDecorationType();
@@ -185,6 +189,144 @@ function refreshDiagnostics(document: vscode.TextDocument, collection: vscode.Di
     }
 
     collection.set(document.uri, diagnostics);
+}
+
+async function checkAndInstallDependencies(context: vscode.ExtensionContext) {
+    const DEPS_CHECKED_KEY = 'yamlIndentVisualizer.depsChecked';
+    
+    // Проверяем только один раз за сессию
+    const alreadyChecked = context.globalState.get<boolean>(DEPS_CHECKED_KEY, false);
+    if (alreadyChecked) {
+        return;
+    }
+
+    const tools = [
+        { name: 'yamllint', cmd: 'yamllint --version' },
+        { name: 'ansible-lint', cmd: 'ansible-lint --version' },
+        { name: 'ansible', cmd: 'ansible --version' }
+    ];
+
+    const missing: string[] = [];
+
+    for (const tool of tools) {
+        const exists = await checkToolExists(tool.cmd);
+        if (!exists) {
+            missing.push(tool.name);
+        }
+    }
+
+    if (missing.length > 0) {
+        const message = `YAML Indent Visualizer: Не найдены инструменты: ${missing.join(', ')}. Установить автоматически?`;
+        const install = 'Установить';
+        const later = 'Позже';
+        const never = 'Не спрашивать';
+
+        const choice = await vscode.window.showInformationMessage(message, install, later, never);
+
+        if (choice === install) {
+            await installDependencies(missing);
+        } else if (choice === never) {
+            await context.globalState.update(DEPS_CHECKED_KEY, true);
+        }
+    } else {
+        await context.globalState.update(DEPS_CHECKED_KEY, true);
+    }
+}
+
+async function checkToolExists(command: string): Promise<boolean> {
+    return new Promise((resolve) => {
+        cp.exec(command, (error) => {
+            resolve(!error || error.code === 0);
+        });
+    });
+}
+
+async function installDependencies(tools: string[]): Promise<void> {
+    const outputChannel = vscode.window.createOutputChannel('YAML Indent Visualizer - Установка');
+    outputChannel.show();
+
+    outputChannel.appendLine('Начинаем установку зависимостей...');
+    outputChannel.appendLine('');
+
+    // Определяем команду установки
+    const isLinux = process.platform === 'linux';
+    const isMac = process.platform === 'darwin';
+    const isWindows = process.platform === 'win32';
+
+    let installCmd = '';
+    
+    if (isWindows) {
+        installCmd = 'pip install';
+    } else {
+        installCmd = 'pip3 install --user';
+    }
+
+    // Для ansible-lint нужен ansible
+    const packagesToInstall = new Set(tools);
+    if (packagesToInstall.has('ansible-lint')) {
+        packagesToInstall.add('ansible');
+    }
+
+    const packages = Array.from(packagesToInstall).join(' ');
+    const fullCommand = `${installCmd} ${packages}`;
+
+    outputChannel.appendLine(`Выполняется: ${fullCommand}`);
+    outputChannel.appendLine('');
+
+    return new Promise((resolve) => {
+        const proc = cp.exec(fullCommand, (error, stdout, stderr) => {
+            if (error) {
+                outputChannel.appendLine('❌ Ошибка установки:');
+                outputChannel.appendLine(error.message);
+                outputChannel.appendLine(stderr);
+                
+                vscode.window.showErrorMessage(
+                    'Не удалось установить зависимости автоматически. Установите вручную: ' + 
+                    fullCommand
+                );
+            } else {
+                outputChannel.appendLine('✅ Установка завершена успешно!');
+                outputChannel.appendLine('');
+                outputChannel.appendLine('Установленные пакеты:');
+                outputChannel.appendLine(stdout);
+                
+                // Проверяем PATH
+                if (!isWindows) {
+                    const homeDir = process.env.HOME || '~';
+                    const localBin = `${homeDir}/.local/bin`;
+                    
+                    outputChannel.appendLine('');
+                    outputChannel.appendLine('⚠️ ВАЖНО: Убедитесь что ~/.local/bin в PATH:');
+                    outputChannel.appendLine(`echo 'export PATH="${localBin}:$PATH"' >> ~/.bashrc`);
+                    outputChannel.appendLine('source ~/.bashrc');
+                    outputChannel.appendLine('');
+                    outputChannel.appendLine('Затем перезапустите VS Code.');
+                }
+
+                vscode.window.showInformationMessage(
+                    'Зависимости установлены! Перезапустите VS Code для применения изменений.',
+                    'Перезапустить'
+                ).then(choice => {
+                    if (choice === 'Перезапустить') {
+                        vscode.commands.executeCommand('workbench.action.reloadWindow');
+                    }
+                });
+            }
+            resolve();
+        });
+
+        // Выводим процесс установки в реальном времени
+        if (proc.stdout) {
+            proc.stdout.on('data', (data) => {
+                outputChannel.append(data.toString());
+            });
+        }
+        if (proc.stderr) {
+            proc.stderr.on('data', (data) => {
+                outputChannel.append(data.toString());
+            });
+        }
+    });
 }
 
 export function deactivate() {
