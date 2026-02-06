@@ -156,6 +156,11 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
      * Получить HTML для webview
      */
     private _getHtmlForWebview(webview: vscode.Webview): string {
+        // Получаем настройку масштаба
+        const config = vscode.workspace.getConfiguration('ansible-lint');
+        const uiScale = config.get<number>('uiScale', 100);
+        const scaleFactor = uiScale / 100;
+
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -166,7 +171,7 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         body {
             padding: 10px;
             font-family: var(--vscode-font-family);
-            font-size: var(--vscode-font-size);
+            font-size: calc(var(--vscode-font-size) * ${scaleFactor});
             color: var(--vscode-foreground);
         }
 

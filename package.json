@@ -136,6 +136,13 @@
           "default": 2,
           "enum": [2, 4],
           "description": "Number of spaces for indentation"
+        },
+        "ansible-lint.uiScale": {
+          "type": "number",
+          "default": 100,
+          "minimum": 50,
+          "maximum": 150,
+          "description": "UI scale for error panel (50-150%)"
         }
       }
     },
