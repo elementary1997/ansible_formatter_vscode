@@ -248,18 +248,8 @@ async function installDependencies(tools: string[]): Promise<void> {
     outputChannel.appendLine('Начинаем установку зависимостей...');
     outputChannel.appendLine('');
 
-    // Определяем команду установки
     const isLinux = process.platform === 'linux';
-    const isMac = process.platform === 'darwin';
     const isWindows = process.platform === 'win32';
-
-    let installCmd = '';
-    
-    if (isWindows) {
-        installCmd = 'pip install';
-    } else {
-        installCmd = 'pip3 install --user';
-    }
 
     // Для ansible-lint нужен ansible
     const packagesToInstall = new Set(tools);
@@ -268,6 +258,39 @@ async function installDependencies(tools: string[]): Promise<void> {
     }
 
     const packages = Array.from(packagesToInstall).join(' ');
+
+    // На Linux пробуем несколько методов
+    if (isLinux) {
+        // Метод 1: Попробовать apt (для Debian/Ubuntu/Astra)
+        outputChannel.appendLine('🔍 Пробуем установить через apt...');
+        const aptSuccess = await tryAptInstall(packages, outputChannel);
+        
+        if (aptSuccess) {
+            outputChannel.appendLine('');
+            outputChannel.appendLine('✅ Установка через apt завершена!');
+            showSuccessMessage();
+            return;
+        }
+
+        // Метод 2: Попробовать pipx
+        outputChannel.appendLine('');
+        outputChannel.appendLine('🔍 Пробуем установить через pipx...');
+        const pipxSuccess = await tryPipxInstall(packagesToInstall, outputChannel);
+        
+        if (pipxSuccess) {
+            outputChannel.appendLine('');
+            outputChannel.appendLine('✅ Установка через pipx завершена!');
+            showSuccessMessage();
+            return;
+        }
+
+        // Метод 3: pip3 install --user с обходом externally-managed
+        outputChannel.appendLine('');
+        outputChannel.appendLine('🔍 Пробуем pip3 install --user...');
+    }
+
+    // Для Windows или fallback для Linux
+    let installCmd = isWindows ? 'pip install' : 'pip3 install --user --break-system-packages';
     const fullCommand = `${installCmd} ${packages}`;
 
     outputChannel.appendLine(`Выполняется: ${fullCommand}`);
@@ -303,14 +326,7 @@ async function installDependencies(tools: string[]): Promise<void> {
                     outputChannel.appendLine('Затем перезапустите VS Code.');
                 }
 
-                vscode.window.showInformationMessage(
-                    'Зависимости установлены! Перезапустите VS Code для применения изменений.',
-                    'Перезапустить'
-                ).then(choice => {
-                    if (choice === 'Перезапустить') {
-                        vscode.commands.executeCommand('workbench.action.reloadWindow');
-                    }
-                });
+                showSuccessMessage();
             }
             resolve();
         });
@@ -325,6 +341,99 @@ async function installDependencies(tools: string[]): Promise<void> {
             proc.stderr.on('data', (data) => {
                 outputChannel.append(data.toString());
             });
+        }
+    });
+}
+
+async function tryAptInstall(packages: string, outputChannel: vscode.OutputChannel): Promise<boolean> {
+    const aptPackages = packages
+        .replace('ansible-lint', 'ansible-lint')
+        .replace('yamllint', 'yamllint')
+        .replace('ansible', 'ansible');
+
+    return new Promise((resolve) => {
+        // Сначала проверяем что apt доступен
+        cp.exec('which apt-get', (error) => {
+            if (error) {
+                outputChannel.appendLine('   ⚠️ apt-get не найден, пропускаем');
+                resolve(false);
+                return;
+            }
+
+            const cmd = `sudo apt-get install -y ${aptPackages}`;
+            outputChannel.appendLine(`   Команда: ${cmd}`);
+            outputChannel.appendLine('   Может потребоваться ввод пароля sudo...');
+
+            cp.exec(cmd, (error, stdout, stderr) => {
+                if (error) {
+                    outputChannel.appendLine(`   ❌ Ошибка: ${error.message}`);
+                    resolve(false);
+                } else {
+                    outputChannel.appendLine(stdout);
+                    resolve(true);
+                }
+            });
+        });
+    });
+}
+
+async function tryPipxInstall(packages: Set<string>, outputChannel: vscode.OutputChannel): Promise<boolean> {
+    return new Promise((resolve) => {
+        // Проверяем что pipx доступен
+        cp.exec('which pipx', (error) => {
+            if (error) {
+                outputChannel.appendLine('   ⚠️ pipx не найден');
+                outputChannel.appendLine('   💡 Установите pipx: sudo apt install pipx');
+                resolve(false);
+                return;
+            }
+
+            outputChannel.appendLine('   ✅ pipx найден!');
+            
+            // Устанавливаем пакеты через pipx
+            const installPromises = Array.from(packages).map(pkg => {
+                return new Promise<boolean>((pkgResolve) => {
+                    const cmd = `pipx install ${pkg}`;
+                    outputChannel.appendLine(`   Выполняется: ${cmd}`);
+                    
+                    cp.exec(cmd, (err, stdout, stderr) => {
+                        if (err && !stdout.includes('already installed')) {
+                            outputChannel.appendLine(`   ⚠️ ${pkg}: ${err.message}`);
+                            pkgResolve(false);
+                        } else {
+                            outputChannel.appendLine(`   ✅ ${pkg} установлен`);
+                            pkgResolve(true);
+                        }
+                    });
+                });
+            });
+
+            Promise.all(installPromises).then(results => {
+                resolve(results.some(r => r));
+            });
+        });
+    });
+}
+
+function showSuccessMessage() {
+    const homeDir = process.env.HOME || '~';
+    const isLinux = process.platform === 'linux';
+    
+    let message = 'Зависимости установлены! Перезапустите VS Code.';
+    
+    if (isLinux) {
+        message += '\n\nУбедитесь что ~/.local/bin в PATH:\nexport PATH="$HOME/.local/bin:$PATH"';
+    }
+
+    vscode.window.showInformationMessage(
+        'Зависимости установлены! Перезапустите VS Code для применения изменений.',
+        'Перезапустить',
+        'Инструкции'
+    ).then(choice => {
+        if (choice === 'Перезапустить') {
+            vscode.commands.executeCommand('workbench.action.reloadWindow');
+        } else if (choice === 'Инструкции') {
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/elementary1997/ansible_formatter_vscode/blob/main/AUTO_INSTALL.md'));
         }
     });
 }
