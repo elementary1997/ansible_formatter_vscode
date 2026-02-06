@@ -7,6 +7,55 @@ import * as os from 'os';
 export class IndentFixer {
 
     /**
+     * Run linters on fixed text and return diagnostics
+     */
+    public static async runLintersOnText(text: string, fileName: string, workspaceRoot: string): Promise<string[]> {
+        const diagnostics: string[] = [];
+        const tempFileName = `.temp_check_${Date.now()}${path.extname(fileName)}`;
+        const tempFilePath = path.join(workspaceRoot, tempFileName);
+
+        fs.writeFileSync(tempFilePath, text);
+
+        try {
+            // Check yamllint
+            try {
+                const yamllintOutput = await this.runCommand(`yamllint -f parsable "${tempFileName}"`, workspaceRoot);
+                if (yamllintOutput && yamllintOutput.length > 0) {
+                    const formattedOutput = this.formatYamllintOutput(yamllintOutput, tempFileName);
+                    diagnostics.push(`📋 yamllint:\n${formattedOutput}`);
+                } else {
+                    diagnostics.push('✅ yamllint: Ошибок не найдено');
+                }
+            } catch (err: any) {
+                if (!err.message.includes('not found') && !err.message.includes('не является')) {
+                    diagnostics.push(`⚠️ yamllint: ${err.message}`);
+                }
+            }
+
+            // Check ansible-lint
+            try {
+                const ansibleLintOutput = await this.runCommand(`ansible-lint -f pep8 "${tempFileName}"`, workspaceRoot);
+                if (ansibleLintOutput && ansibleLintOutput.length > 0) {
+                    const formattedOutput = this.formatAnsibleLintOutput(ansibleLintOutput, tempFileName);
+                    diagnostics.push(`🔍 ansible-lint:\n${formattedOutput}`);
+                } else {
+                    diagnostics.push('✅ ansible-lint: Ошибок не найдено');
+                }
+            } catch (err: any) {
+                if (!err.message.includes('not found') && !err.message.includes('не является')) {
+                    diagnostics.push(`⚠️ ansible-lint: ${err.message}`);
+                }
+            }
+        } finally {
+            if (fs.existsSync(tempFilePath)) {
+                fs.unlinkSync(tempFilePath);
+            }
+        }
+
+        return diagnostics;
+    }
+
+    /**
      * Run linters and return diagnostics
      */
     public static async runLinters(activeEditor: vscode.TextEditor): Promise<string[]> {

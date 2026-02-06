@@ -93,20 +93,32 @@ export class IndentPreviewProvider implements vscode.WebviewViewProvider {
             this._view.webview.html = this._getHtmlForWebview(this._view.webview, '<p>⏳ Проверка файла (запуск линтеров и форматирование)...</p>');
 
             try {
-                // Run linters first
-                const linterResults = await IndentFixer.runLinters(editor);
+                // Run linters first on ORIGINAL
+                const linterResultsOriginal = await IndentFixer.runLinters(editor);
                 
                 // Then check formatting
                 const fixed = await IndentFixer.fixTextAsync(text, editor);
 
+                // Run linters on FIXED text
+                const workspaceFolder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
+                let linterResultsFixed: string[] = [];
+                
+                if (fixed !== text && workspaceFolder) {
+                    linterResultsFixed = await IndentFixer.runLintersOnText(
+                        fixed, 
+                        editor.document.fileName,
+                        workspaceFolder.uri.fsPath
+                    );
+                }
+
                 // Build results HTML
                 let resultsHtml = '<div class="results-section">';
                 
-                // Show linter results
-                resultsHtml += '<h3>🔍 Best Practices & Lint</h3>';
-                if (linterResults.length > 0) {
+                // Show linter results for ORIGINAL
+                resultsHtml += '<h3>🔍 Оригинал: Best Practices & Lint</h3>';
+                if (linterResultsOriginal.length > 0) {
                     resultsHtml += '<div class="lint-results">';
-                    for (const result of linterResults) {
+                    for (const result of linterResultsOriginal) {
                         const isSuccess = result.includes('✅') || result.includes('Ошибок не найдено');
                         const isWarning = result.includes('⚠️') || result.includes('Не установлен');
                         const resultClass = isSuccess ? 'lint-success' : (isWarning ? 'lint-info' : 'lint-error');
@@ -134,6 +146,19 @@ export class IndentPreviewProvider implements vscode.WebviewViewProvider {
                             <pre>${escapeHtml(fixed)}</pre>
                          </div>
                          <button class="fix-btn" id="applyFixBtn" data-fixed="${escapeHtml(fixedTextJson)}" data-range="${lastLine},${lastLineLength}">✅ Применить исправления</button>`;
+                    
+                    // Show linter results for FIXED text
+                    if (linterResultsFixed.length > 0) {
+                        resultsHtml += '<h3>✨ После исправления: Best Practices & Lint</h3>';
+                        resultsHtml += '<div class="lint-results">';
+                        for (const result of linterResultsFixed) {
+                            const isSuccess = result.includes('✅') || result.includes('Ошибок не найдено');
+                            const isWarning = result.includes('⚠️');
+                            const resultClass = isSuccess ? 'lint-success' : (isWarning ? 'lint-info' : 'lint-error');
+                            resultsHtml += `<div class="${resultClass}"><pre>${escapeHtml(result)}</pre></div>`;
+                        }
+                        resultsHtml += '</div>';
+                    }
                 }
                 
                 resultsHtml += '</div>';
