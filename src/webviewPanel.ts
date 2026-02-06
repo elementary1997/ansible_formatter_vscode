@@ -213,6 +213,40 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             background: var(--vscode-button-background);
         }
 
+        .lang-switcher {
+            display: flex;
+            gap: 2px;
+            margin-left: 8px;
+        }
+
+        .lang-btn {
+            padding: 4px 8px;
+            font-size: 0.75em;
+            font-weight: bold;
+            border: 1px solid var(--vscode-button-background);
+            background: transparent;
+            color: var(--vscode-foreground);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .lang-btn:first-child {
+            border-radius: 3px 0 0 3px;
+        }
+
+        .lang-btn:last-child {
+            border-radius: 0 3px 3px 0;
+        }
+
+        .lang-btn.active {
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+        }
+
+        .lang-btn:hover:not(.active) {
+            background: var(--vscode-list-hoverBackground);
+        }
+
         .error-group {
             margin-bottom: 15px;
         }
@@ -497,6 +531,10 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             <button onclick="fixFile()" title="Fix current file">Fix File</button>
             <button onclick="fixAll()" title="Fix all files">Fix All</button>
             <button onclick="openSettings()" title="Open Settings" class="settings-btn">⚙️</button>
+            <div class="lang-switcher">
+                <button class="lang-btn" id="lang-en" onclick="setLang('en')" title="English">🇬🇧</button>
+                <button class="lang-btn active" id="lang-ru" onclick="setLang('ru')" title="Русский">🇷🇺</button>
+            </div>
         </div>
     </div>
 
@@ -521,6 +559,7 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
         const vscode = acquireVsCodeApi();
         let allErrors = []; // Все ошибки
         let currentFilter = 'all'; // Текущий фильтр
+        let currentLang = 'ru'; // Текущий язык (по умолчанию русский)
 
         // Восстанавливаем сохраненное состояние при загрузке
         window.addEventListener('load', () => {
@@ -529,7 +568,9 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                 console.log('[Webview] Restoring state:', state.errors.length, 'errors');
                 allErrors = state.errors;
                 currentFilter = state.filter || 'all';
+                currentLang = state.lang || 'ru';
                 updateFilterButtons();
+                updateLangButtons();
                 updateErrorsUI(allErrors);
             }
         });
@@ -541,7 +582,7 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                 allErrors = message.errors;
                 updateErrorsUI(allErrors);
                 // Сохраняем состояние для восстановления
-                vscode.setState({ errors: allErrors, filter: currentFilter });
+                vscode.setState({ errors: allErrors, filter: currentFilter, lang: currentLang });
             }
         });
 
@@ -549,12 +590,24 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             currentFilter = filter;
             updateFilterButtons();
             updateErrorsUI(allErrors);
-            vscode.setState({ errors: allErrors, filter: currentFilter });
+            vscode.setState({ errors: allErrors, filter: currentFilter, lang: currentLang });
         }
 
         function updateFilterButtons() {
             document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById('filter-' + currentFilter).classList.add('active');
+        }
+
+        function setLang(lang) {
+            currentLang = lang;
+            updateLangButtons();
+            updateErrorsUI(allErrors);
+            vscode.setState({ errors: allErrors, filter: currentFilter, lang: currentLang });
+        }
+
+        function updateLangButtons() {
+            document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('lang-' + currentLang).classList.add('active');
         }
 
         function filterErrors(errors) {
@@ -640,7 +693,7 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
                             <span class="error-location-inline">Line \${error.line}\${error.column ? ':' + error.column : ''}</span>
                         </div>
                         <div class="error-detailed-message" onclick="gotoError('\${error.fullPath}', \${error.line})">
-                            \${escapeHtml(error.detailedExplanation || error.message)}
+                            \${escapeHtml(getErrorMessage(error))}
                         </div>
                         <div class="error-actions">
                             \${error.fixable ? '<span class="fixable-badge">🔧 Auto-fixable</span>' : ''}
@@ -754,6 +807,14 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             vscode.postMessage({
                 type: 'clearCache'
             });
+        }
+
+        function getErrorMessage(error) {
+            if (currentLang === 'en') {
+                return error.message;
+            } else {
+                return error.detailedExplanation || error.message;
+            }
         }
 
         function escapeHtml(text) {
