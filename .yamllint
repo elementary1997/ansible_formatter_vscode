@@ -74,11 +74,11 @@ rules:
   # Key ordering - don't enforce key ordering (Ansible has specific requirements)
   key-ordering: disable
 
-  # Line length - enforce reasonable line length
+  # Line length - enforce reasonable line length (STRICT)
   line-length:
     max: 150
-    allow-non-breakable-words: true
-    allow-non-breakable-inline-mappings: true
+    allow-non-breakable-words: false  # Строго проверяем длину (без исключений)
+    allow-non-breakable-inline-mappings: false  # Строго проверяем inline mappings
     level: warning
 
   # New line at end of file
