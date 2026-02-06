@@ -6,6 +6,15 @@ import * as os from 'os';
 
 export class IndentFixer {
 
+    private static _lastPreCommitOutput: {code: number, stdout: string, stderr: string} | null = null;
+    
+    /**
+     * Получить последний вывод pre-commit
+     */
+    public static getLastPreCommitOutput(): {code: number, stdout: string, stderr: string} | null {
+        return this._lastPreCommitOutput;
+    }
+
     /**
      * Ищет исполняемый файл в стандартных локациях
      * Возвращает полный путь или имя команды если найдена в PATH
@@ -497,6 +506,13 @@ export class IndentFixer {
             });
             
             console.log(`[IndentFixer] Pre-commit completed with code ${result.code}`);
+            
+            // Store pre-commit output for display
+            IndentFixer._lastPreCommitOutput = {
+                code: result.code,
+                stdout: result.stdout,
+                stderr: result.stderr
+            };
             
             // Add to output channel
             const outputChannel = vscode.window.createOutputChannel('YAML Auto-Fix Debug');
