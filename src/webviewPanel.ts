@@ -521,10 +521,6 @@ export class WebviewPanel implements vscode.WebviewViewProvider {
             <button onclick="fixFile()" title="Fix current file">Fix File</button>
             <button onclick="fixAll()" title="Fix all files">Fix All</button>
             <button onclick="openSettings()" title="Open Settings" class="settings-btn">⚙️</button>
-            <div class="lang-switcher">
-                <button class="lang-btn" id="lang-en" onclick="setLang('en')" title="English">🇬🇧</button>
-                <button class="lang-btn active" id="lang-ru" onclick="setLang('ru')" title="Русский">🇷🇺</button>
-            </div>
         </div>
     </div>
 
