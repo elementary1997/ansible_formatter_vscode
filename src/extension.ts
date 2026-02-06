@@ -1,445 +1,366 @@
-import * as vscode from 'vscode';
-import * as cp from 'child_process';
-import { IndentPreviewProvider } from './previewProvider';
+/**
+ * Extension.ts - главный файл расширения
+ */
 
-let parentKeyDecorationType: vscode.TextEditorDecorationType;
-let diagnosticCollection: vscode.DiagnosticCollection;
+import * as vscode from 'vscode';
+import { Executor } from './executor';
+import { Parser } from './parser';
+import { DiagnosticsProvider } from './diagnosticsProvider';
+import { CodeActionsProvider, ignoreRule } from './codeActionsProvider';
+import { WebviewPanel } from './webviewPanel';
+import { AnsibleLintFixer } from './ansibleLintFixer';
+import { QuickFixer } from './quickFixer';
+
+let diagnosticsProvider: DiagnosticsProvider;
+let webviewPanel: WebviewPanel;
+let statusBarItem: vscode.StatusBarItem;
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('YAML Indent Visualizer is now active!');
-
-    // Проверяем и устанавливаем зависимости
-    checkAndInstallDependencies(context);
-
-    // Initialize decoration type
-    updateDecorationType();
-
-    // Initialize diagnostics
-    diagnosticCollection = vscode.languages.createDiagnosticCollection('yaml-indent');
-    context.subscriptions.push(diagnosticCollection);
-
-    // Initialize Preview Provider
-    const previewProvider = new IndentPreviewProvider(context.extensionUri);
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(IndentPreviewProvider.viewType, previewProvider)
-    );
-
-    // Update decoration type if configuration changes
-    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e: vscode.ConfigurationChangeEvent) => {
-        if (e.affectsConfiguration('yamlIndentVisualizer')) {
-            updateDecorationType();
-        }
-    }));
-
-    // Listener for selection changes
-    let selectionDisposable = vscode.window.onDidChangeTextEditorSelection((event: vscode.TextEditorSelectionChangeEvent) => {
-        const editor = event.textEditor;
-        if (!editor || (editor.document.languageId !== 'yaml' && editor.document.languageId !== 'ansible')) {
-            return;
-        }
-        updateDecorations(editor);
-        // previewProvider.update(editor); // Disabled - should not run on selection
-    });
-
-    // Listener for document changes (for linting)
-    let changeDisposable = vscode.workspace.onDidChangeTextDocument(event => {
-        if (event.document.languageId === 'yaml' || event.document.languageId === 'ansible') {
-            refreshDiagnostics(event.document, diagnosticCollection);
-        }
-    });
-
-    // Listener for active editor change (to validate immediately)
-    let activeEditorDisposable = vscode.window.onDidChangeActiveTextEditor(editor => {
-        if (editor && (editor.document.languageId === 'yaml' || editor.document.languageId === 'ansible')) {
-            refreshDiagnostics(editor.document, diagnosticCollection);
-            updateDecorations(editor);
-            // previewProvider.update(editor); // REMOVED: panel updates only on open or manual refresh
-        }
-    });
-
-    context.subscriptions.push(selectionDisposable, changeDisposable, activeEditorDisposable);
-}
-
-function updateDecorationType() {
-    if (parentKeyDecorationType) {
-        parentKeyDecorationType.dispose();
-    }
-
-    const config = vscode.workspace.getConfiguration('yamlIndentVisualizer');
-    const color = config.get<string>('highlightColor') || 'rgba(255, 215, 0, 0.3)';
-    // const showRuler = config.get<boolean>('showRuler'); // TODO: Implement ruler logic if needed
-
-    parentKeyDecorationType = vscode.window.createTextEditorDecorationType({
-        backgroundColor: color,
-        isWholeLine: false, // Only highlight the text, not the whole line width
-        borderRadius: '2px'
-    });
-}
-
-function updateDecorations(editor: vscode.TextEditor) {
-    if (!editor.selection.isEmpty) {
-        // Option 1: If selection is not empty, maybe clear or process differently?
-        // For now, let's focus on cursor position (active)
-    }
-
-    const document = editor.document;
-    const currentLineIndex = editor.selection.active.line;
-    const currentLineText = document.lineAt(currentLineIndex).text;
-
-    // Calculate indentation of current line
-    // Use regex to find leading spaces
-    const currentIndentMatch = currentLineText.match(/^(\s*)/);
-    let currentIndent = currentIndentMatch ? currentIndentMatch[1].length : 0;
-
-    // If the line is empty, try to infer context from above (optional, but good for UX)
-    if (currentLineText.trim() === '') {
-        // Just take the indentation of the cursor if possible, or skip
-        // For simplicity, let's treat empty line as having 0 indent effectively for searching parents? 
-        // No, if I am on an empty line inside a block, I want to see parents.
-        // Let's assume the cursor character index is the desired indent.
-        currentIndent = editor.selection.active.character;
-    }
-
-    const parentRanges: vscode.Range[] = [];
-
-    // Traverse upwards
-    let nextIndentLimit = currentIndent;
-
-    for (let i = currentLineIndex - 1; i >= 0; i--) {
-        const line = document.lineAt(i);
-        const text = line.text;
-
-        // Skip empty lines
-        if (text.trim() === '') {
-            continue;
-        }
-
-        const indentMatch = text.match(/^(\s*)/);
-        const indent = indentMatch ? indentMatch[1].length : 0;
-
-        // Found a parent
-        if (indent < nextIndentLimit) {
-            // Add to decoration ranges
-            // Try to match key more robustly (handle quotes)
-            const keyMatch = text.match(/^\s*(?:-\s+)?(?:["']?)([\w\-\s]+)(?:["']?)\s*:/);
-
-            if (keyMatch) {
-                // Highlight the captured key part
-                // We need to find the specific start index of the capture group in the original string
-                const matchString = keyMatch[1];
-                const keyStart = text.indexOf(matchString, indent); // search after indentation
-                if (keyStart !== -1) {
-                    const keyEnd = keyStart + matchString.length;
-                    parentRanges.push(new vscode.Range(i, keyStart, i, keyEnd));
-                } else {
-                    // Fallback
-                    parentRanges.push(line.range);
-                }
-            } else {
-                // Determine range of non-whitespace content
-                const firstChar = line.firstNonWhitespaceCharacterIndex;
-                const lastChar = text.trimRight().length;
-                parentRanges.push(new vscode.Range(i, firstChar, i, lastChar));
-            }
-
-            // Set new limit
-            nextIndentLimit = indent;
-
-            // Stop if we reached root
-            if (indent === 0) {
-                break;
-            }
-        }
-    }
-
-    editor.setDecorations(parentKeyDecorationType, parentRanges);
-}
-
-function refreshDiagnostics(document: vscode.TextDocument, collection: vscode.DiagnosticCollection) {
-    const diagnostics: vscode.Diagnostic[] = [];
-
-    // MINIMAL validation - only critical syntax errors
-    // All style and best practice checks are done by external tools (yamllint, ansible-lint)
-    // shown in the extension panel
-
-    for (let i = 0; i < document.lineCount; i++) {
-        const line = document.lineAt(i);
-        const text = line.text;
-
-        if (text.trim() === '') {
-            continue;
-        }
-
-        // Only check for tabs (YAML forbids tabs - this is a syntax error)
-        if (text.includes('\t')) {
-            const tabIndex = text.indexOf('\t');
-            const range = new vscode.Range(i, tabIndex, i, tabIndex + 1);
-            const diagnostic = new vscode.Diagnostic(
-                range, 
-                'YAML forbids tabs. Use spaces. (Run yamllint for full validation)', 
-                vscode.DiagnosticSeverity.Error
-            );
-            diagnostics.push(diagnostic);
-        }
-    }
-
-    collection.set(document.uri, diagnostics);
-}
-
-async function checkAndInstallDependencies(context: vscode.ExtensionContext) {
-    const DEPS_CHECKED_KEY = 'yamlIndentVisualizer.depsChecked';
+    console.log('Ansible Lint Helper is now active!');
     
-    // Проверяем только один раз за сессию
-    const alreadyChecked = context.globalState.get<boolean>(DEPS_CHECKED_KEY, false);
-    if (alreadyChecked) {
+    // Инициализация провайдеров
+    diagnosticsProvider = new DiagnosticsProvider();
+    webviewPanel = new WebviewPanel(context.extensionUri);
+    
+    // Регистрация Webview Provider
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(
+            WebviewPanel.viewType,
+            webviewPanel
+        )
+    );
+    
+    // Регистрация Code Actions Provider
+    context.subscriptions.push(
+        vscode.languages.registerCodeActionsProvider(
+            ['yaml', 'ansible'],
+            new CodeActionsProvider(),
+            {
+                providedCodeActionKinds: CodeActionsProvider.providedCodeActionKinds
+            }
+        )
+    );
+    
+    // Создание Status Bar Item
+    statusBarItem = vscode.window.createStatusBarItem(
+        vscode.StatusBarAlignment.Left,
+        100
+    );
+    statusBarItem.text = '$(play) Run Ansible Lint';
+    statusBarItem.command = 'ansible-lint.run';
+    statusBarItem.tooltip = 'Run ansible-lint on current file';
+    context.subscriptions.push(statusBarItem);
+    
+    // Показываем кнопку только для YAML/Ansible файлов
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(editor => {
+            if (editor && (editor.document.languageId === 'yaml' || editor.document.languageId === 'ansible')) {
+                statusBarItem.show();
+            } else {
+                statusBarItem.hide();
+            }
+        })
+    );
+    
+    // Показываем кнопку если текущий файл - YAML
+    if (vscode.window.activeTextEditor) {
+        const doc = vscode.window.activeTextEditor.document;
+        if (doc.languageId === 'yaml' || doc.languageId === 'ansible') {
+            statusBarItem.show();
+        }
+    }
+    
+    // Регистрация команд
+    context.subscriptions.push(
+        vscode.commands.registerCommand('ansible-lint.run', runAnsibleLintOnCurrentFile)
+    );
+    
+    context.subscriptions.push(
+        vscode.commands.registerCommand('ansible-lint.runAll', runAnsibleLintOnAllFiles)
+    );
+    
+    context.subscriptions.push(
+        vscode.commands.registerCommand('ansible-lint.runPreCommit', runPreCommit)
+    );
+    
+    context.subscriptions.push(
+        vscode.commands.registerCommand('ansible-lint.fixCurrent', fixCurrentFile)
+    );
+    
+    context.subscriptions.push(
+        vscode.commands.registerCommand('ansible-lint.fixWithTool', fixWithTool)
+    );
+    
+    context.subscriptions.push(
+        vscode.commands.registerCommand('ansible-lint.ignoreRule', ignoreRule)
+    );
+    
+    // Auto-fix on save (если включено в настройках)
+    context.subscriptions.push(
+        vscode.workspace.onDidSaveTextDocument(async (document) => {
+            const config = vscode.workspace.getConfiguration('ansible-lint');
+            const autoFix = config.get<boolean>('autoFixOnSave', false);
+            
+            if (autoFix && (document.languageId === 'yaml' || document.languageId === 'ansible')) {
+                await fixCurrentFile();
+            }
+        })
+    );
+    
+    context.subscriptions.push(diagnosticsProvider);
+}
+
+/**
+ * Запустить ansible-lint на текущем файле
+ */
+async function runAnsibleLintOnCurrentFile(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    
+    if (!editor) {
+        vscode.window.showErrorMessage('No active editor');
         return;
     }
-
-    const tools = [
-        { name: 'yamllint', cmd: 'yamllint --version' },
-        { name: 'ansible-lint', cmd: 'ansible-lint --version' },
-        { name: 'ansible', cmd: 'ansible --version' },
-        { name: 'pre-commit', cmd: 'pre-commit --version' }
-    ];
-
-    const missing: string[] = [];
-
-    for (const tool of tools) {
-        const exists = await checkToolExists(tool.cmd);
-        if (!exists) {
-            missing.push(tool.name);
-        }
-    }
-
-    if (missing.length > 0) {
-        const message = `YAML Indent Visualizer: Не найдены инструменты: ${missing.join(', ')}. Установить автоматически?`;
-        const install = 'Установить';
-        const later = 'Позже';
-        const never = 'Не спрашивать';
-
-        const choice = await vscode.window.showInformationMessage(message, install, later, never);
-
-        if (choice === install) {
-            await installDependencies(missing);
-        } else if (choice === never) {
-            await context.globalState.update(DEPS_CHECKED_KEY, true);
-        }
-    } else {
-        await context.globalState.update(DEPS_CHECKED_KEY, true);
-    }
-}
-
-async function checkToolExists(command: string): Promise<boolean> {
-    return new Promise((resolve) => {
-        cp.exec(command, (error) => {
-            resolve(!error || error.code === 0);
-        });
-    });
-}
-
-async function installDependencies(tools: string[]): Promise<void> {
-    const outputChannel = vscode.window.createOutputChannel('YAML Indent Visualizer - Установка');
-    outputChannel.show();
-
-    outputChannel.appendLine('Начинаем установку зависимостей...');
-    outputChannel.appendLine('');
-
-    const isLinux = process.platform === 'linux';
-    const isWindows = process.platform === 'win32';
-
-    // Для ansible-lint нужен ansible
-    const packagesToInstall = new Set(tools);
-    if (packagesToInstall.has('ansible-lint')) {
-        packagesToInstall.add('ansible');
+    
+    const document = editor.document;
+    const filePath = document.uri.fsPath;
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+    
+    if (!workspaceFolder) {
+        vscode.window.showErrorMessage('File is not in a workspace');
+        return;
     }
     
-    // Добавляем pre-commit как обязательный
-    packagesToInstall.add('pre-commit');
-
-    const packages = Array.from(packagesToInstall).join(' ');
-
-    // На Linux пробуем несколько методов
-    if (isLinux) {
-        // Метод 1: Попробовать apt (для Debian/Ubuntu/Astra)
-        outputChannel.appendLine('🔍 Пробуем установить через apt...');
-        const aptSuccess = await tryAptInstall(packages, outputChannel);
-        
-        if (aptSuccess) {
-            outputChannel.appendLine('');
-            outputChannel.appendLine('✅ Установка через apt завершена!');
-            showSuccessMessage();
-            return;
-        }
-
-        // Метод 2: Попробовать pipx
-        outputChannel.appendLine('');
-        outputChannel.appendLine('🔍 Пробуем установить через pipx...');
-        const pipxSuccess = await tryPipxInstall(packagesToInstall, outputChannel);
-        
-        if (pipxSuccess) {
-            outputChannel.appendLine('');
-            outputChannel.appendLine('✅ Установка через pipx завершена!');
-            showSuccessMessage();
-            return;
-        }
-
-        // Метод 3: pip3 install --user с обходом externally-managed
-        outputChannel.appendLine('');
-        outputChannel.appendLine('🔍 Пробуем pip3 install --user...');
-    }
-
-    // Для Windows или fallback для Linux
-    let installCmd = isWindows ? 'pip install' : 'pip3 install --user --break-system-packages';
-    const fullCommand = `${installCmd} ${packages}`;
-
-    outputChannel.appendLine(`Выполняется: ${fullCommand}`);
-    outputChannel.appendLine('');
-
-    return new Promise((resolve) => {
-        const proc = cp.exec(fullCommand, (error, stdout, stderr) => {
-            if (error) {
-                outputChannel.appendLine('❌ Ошибка установки:');
-                outputChannel.appendLine(error.message);
-                outputChannel.appendLine(stderr);
-                
-                vscode.window.showErrorMessage(
-                    'Не удалось установить зависимости автоматически. Установите вручную: ' + 
-                    fullCommand
-                );
-            } else {
-                outputChannel.appendLine('✅ Установка завершена успешно!');
-                outputChannel.appendLine('');
-                outputChannel.appendLine('Установленные пакеты:');
-                outputChannel.appendLine(stdout);
-                
-                // Проверяем PATH
-                if (!isWindows) {
-                    const homeDir = process.env.HOME || '~';
-                    const localBin = `${homeDir}/.local/bin`;
-                    
-                    outputChannel.appendLine('');
-                    outputChannel.appendLine('⚠️ ВАЖНО: Убедитесь что ~/.local/bin в PATH:');
-                    outputChannel.appendLine(`echo 'export PATH="${localBin}:$PATH"' >> ~/.bashrc`);
-                    outputChannel.appendLine('source ~/.bashrc');
-                    outputChannel.appendLine('');
-                    outputChannel.appendLine('Затем перезапустите VS Code.');
-                }
-
-                showSuccessMessage();
-            }
-            resolve();
-        });
-
-        // Выводим процесс установки в реальном времени
-        if (proc.stdout) {
-            proc.stdout.on('data', (data) => {
-                outputChannel.append(data.toString());
-            });
-        }
-        if (proc.stderr) {
-            proc.stderr.on('data', (data) => {
-                outputChannel.append(data.toString());
-            });
-        }
-    });
-}
-
-async function tryAptInstall(packages: string, outputChannel: vscode.OutputChannel): Promise<boolean> {
-    const aptPackages = packages
-        .replace('ansible-lint', 'ansible-lint')
-        .replace('yamllint', 'yamllint')
-        .replace('ansible', 'ansible')
-        .replace('pre-commit', 'pre-commit');
-
-    return new Promise((resolve) => {
-        // Сначала проверяем что apt доступен
-        cp.exec('which apt-get', (error) => {
-            if (error) {
-                outputChannel.appendLine('   ⚠️ apt-get не найден, пропускаем');
-                resolve(false);
-                return;
-            }
-
-            const cmd = `sudo apt-get install -y ${aptPackages}`;
-            outputChannel.appendLine(`   Команда: ${cmd}`);
-            outputChannel.appendLine('   Может потребоваться ввод пароля sudo...');
-
-            cp.exec(cmd, (error, stdout, stderr) => {
-                if (error) {
-                    outputChannel.appendLine(`   ❌ Ошибка: ${error.message}`);
-                    resolve(false);
-                } else {
-                    outputChannel.appendLine(stdout);
-                    resolve(true);
-                }
-            });
-        });
-    });
-}
-
-async function tryPipxInstall(packages: Set<string>, outputChannel: vscode.OutputChannel): Promise<boolean> {
-    return new Promise((resolve) => {
-        // Проверяем что pipx доступен
-        cp.exec('which pipx', (error) => {
-            if (error) {
-                outputChannel.appendLine('   ⚠️ pipx не найден');
-                outputChannel.appendLine('   💡 Установите pipx: sudo apt install pipx');
-                resolve(false);
-                return;
-            }
-
-            outputChannel.appendLine('   ✅ pipx найден!');
+    const workspaceRoot = workspaceFolder.uri.fsPath;
+    
+    try {
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Running ansible-lint...',
+            cancellable: false
+        }, async (progress) => {
+            progress.report({ increment: 0 });
             
-            // Устанавливаем пакеты через pipx
-            const installPromises = Array.from(packages).map(pkg => {
-                return new Promise<boolean>((pkgResolve) => {
-                    const cmd = `pipx install ${pkg}`;
-                    outputChannel.appendLine(`   Выполняется: ${cmd}`);
-                    
-                    cp.exec(cmd, (err, stdout, stderr) => {
-                        if (err && !stdout.includes('already installed')) {
-                            outputChannel.appendLine(`   ⚠️ ${pkg}: ${err.message}`);
-                            pkgResolve(false);
-                        } else {
-                            outputChannel.appendLine(`   ✅ ${pkg} установлен`);
-                            pkgResolve(true);
-                        }
-                    });
-                });
-            });
-
-            Promise.all(installPromises).then(results => {
-                resolve(results.some(r => r));
-            });
+            // Запускаем ansible-lint
+            const result = await Executor.runAnsibleLint(filePath, workspaceRoot, 'json');
+            
+            progress.report({ increment: 50 });
+            
+            // Парсим результаты
+            const errors = Parser.parse(result, workspaceRoot, 'json');
+            
+            progress.report({ increment: 75 });
+            
+            // Обновляем UI
+            diagnosticsProvider.updateDiagnostics(errors);
+            webviewPanel.updateErrors(errors);
+            
+            progress.report({ increment: 100 });
+            
+            // Показываем статистику
+            if (errors.length === 0) {
+                vscode.window.showInformationMessage('✓ No errors found');
+            } else {
+                const errorCount = errors.filter(e => e.severity === 'error').length;
+                const warningCount = errors.filter(e => e.severity === 'warning').length;
+                vscode.window.showInformationMessage(
+                    `Found ${errorCount} errors and ${warningCount} warnings`
+                );
+            }
         });
-    });
+    } catch (error: any) {
+        vscode.window.showErrorMessage(`ansible-lint failed: ${error.message}`);
+    }
 }
 
-function showSuccessMessage() {
-    const homeDir = process.env.HOME || '~';
-    const isLinux = process.platform === 'linux';
+/**
+ * Запустить ansible-lint на всех файлах
+ */
+async function runAnsibleLintOnAllFiles(): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
     
-    let message = 'Зависимости установлены! Перезапустите VS Code.';
-    
-    if (isLinux) {
-        message += '\n\nУбедитесь что ~/.local/bin в PATH:\nexport PATH="$HOME/.local/bin:$PATH"';
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        vscode.window.showErrorMessage('No workspace folder found');
+        return;
     }
+    
+    const workspaceRoot = workspaceFolders[0].uri.fsPath;
+    
+    try {
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Running ansible-lint on all files...',
+            cancellable: false
+        }, async (progress) => {
+            progress.report({ increment: 0 });
+            
+            // Запускаем ansible-lint на всех файлах
+            const result = await Executor.runAnsibleLintAll(workspaceRoot, 'json');
+            
+            progress.report({ increment: 50 });
+            
+            // Парсим результаты
+            const errors = Parser.parse(result, workspaceRoot, 'json');
+            
+            progress.report({ increment: 75 });
+            
+            // Обновляем UI
+            diagnosticsProvider.updateDiagnostics(errors);
+            webviewPanel.updateErrors(errors);
+            
+            progress.report({ increment: 100 });
+            
+            // Показываем статистику
+            if (errors.length === 0) {
+                vscode.window.showInformationMessage('✓ No errors found');
+            } else {
+                const errorCount = errors.filter(e => e.severity === 'error').length;
+                const warningCount = errors.filter(e => e.severity === 'warning').length;
+                const filesCount = new Set(errors.map(e => e.file)).size;
+                vscode.window.showInformationMessage(
+                    `Found ${errorCount} errors and ${warningCount} warnings in ${filesCount} files`
+                );
+            }
+        });
+    } catch (error: any) {
+        vscode.window.showErrorMessage(`ansible-lint failed: ${error.message}`);
+    }
+}
 
-    vscode.window.showInformationMessage(
-        'Зависимости установлены! Перезапустите VS Code для применения изменений.',
-        'Перезапустить',
-        'Инструкции'
-    ).then(choice => {
-        if (choice === 'Перезапустить') {
-            vscode.commands.executeCommand('workbench.action.reloadWindow');
-        } else if (choice === 'Инструкции') {
-            vscode.env.openExternal(vscode.Uri.parse('https://github.com/elementary1997/ansible_formatter_vscode/blob/main/AUTO_INSTALL.md'));
+/**
+ * Запустить pre-commit
+ */
+async function runPreCommit(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    
+    if (!editor) {
+        vscode.window.showErrorMessage('No active editor');
+        return;
+    }
+    
+    const document = editor.document;
+    const filePath = document.uri.fsPath;
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+    
+    if (!workspaceFolder) {
+        vscode.window.showErrorMessage('File is not in a workspace');
+        return;
+    }
+    
+    const workspaceRoot = workspaceFolder.uri.fsPath;
+    
+    try {
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Running pre-commit...',
+            cancellable: false
+        }, async (progress) => {
+            progress.report({ increment: 0 });
+            
+            // Запускаем pre-commit
+            const result = await Executor.runPreCommit(filePath, workspaceRoot);
+            
+            progress.report({ increment: 50 });
+            
+            // Парсим результаты
+            const errors = Parser.parse(result, workspaceRoot, 'pre-commit');
+            
+            progress.report({ increment: 75 });
+            
+            // Обновляем UI
+            diagnosticsProvider.updateDiagnostics(errors);
+            webviewPanel.updateErrors(errors);
+            
+            progress.report({ increment: 100 });
+            
+            // Показываем статистику
+            if (errors.length === 0) {
+                vscode.window.showInformationMessage('✓ pre-commit passed');
+            } else {
+                vscode.window.showWarningMessage(`pre-commit found ${errors.length} issues`);
+            }
+        });
+    } catch (error: any) {
+        vscode.window.showErrorMessage(`pre-commit failed: ${error.message}`);
+    }
+}
+
+/**
+ * Исправить текущий файл (гибридный подход)
+ */
+async function fixCurrentFile(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    
+    if (!editor) {
+        vscode.window.showErrorMessage('No active editor');
+        return;
+    }
+    
+    const document = editor.document;
+    
+    try {
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Fixing file...',
+            cancellable: false
+        }, async (progress) => {
+            progress.report({ increment: 0, message: 'Applying quick fixes...' });
+            
+            // Шаг 1: Применяем быстрые исправления
+            const errors = diagnosticsProvider.getErrorsForFile(document.uri.fsPath);
+            const quickEdits = QuickFixer.applyAllQuickFixes(document, errors);
+            
+            if (quickEdits.length > 0) {
+                const edit = new vscode.WorkspaceEdit();
+                edit.set(document.uri, quickEdits);
+                await vscode.workspace.applyEdit(edit);
+            }
+            
+            progress.report({ increment: 50, message: 'Running ansible-lint --fix...' });
+            
+            // Шаг 2: Применяем ansible-lint --fix
+            await AnsibleLintFixer.fixFile(document);
+            
+            progress.report({ increment: 100 });
+        });
+        
+        // Перезапускаем проверку
+        await runAnsibleLintOnCurrentFile();
+        
+    } catch (error: any) {
+        vscode.window.showErrorMessage(`Failed to fix file: ${error.message}`);
+    }
+}
+
+/**
+ * Исправить с помощью ansible-lint --fix
+ */
+async function fixWithTool(document?: vscode.TextDocument): Promise<void> {
+    if (!document) {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showErrorMessage('No active editor');
+            return;
         }
-    });
+        document = editor.document;
+    }
+    
+    try {
+        const success = await AnsibleLintFixer.fixFile(document);
+        
+        if (success) {
+            // Перезапускаем проверку
+            await runAnsibleLintOnCurrentFile();
+        }
+    } catch (error: any) {
+        vscode.window.showErrorMessage(`Failed to fix with ansible-lint: ${error.message}`);
+    }
 }
 
 export function deactivate() {
-    if (parentKeyDecorationType) {
-        parentKeyDecorationType.dispose();
+    if (diagnosticsProvider) {
+        diagnosticsProvider.dispose();
+    }
+    if (statusBarItem) {
+        statusBarItem.dispose();
     }
 }

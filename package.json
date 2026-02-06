@@ -1,52 +1,86 @@
 {
-  "name": "yaml-indent-visualizer",
-  "displayName": "YAML Indent Visualizer & Best Practices",
-  "description": "Visualizes parent key hierarchy, checks best practices with yamllint/ansible-lint, and auto-fixes indentation for YAML and Ansible files.",
-  "version": "0.1.0",
+  "name": "ansible-lint-helper",
+  "displayName": "Ansible Lint Helper",
+  "description": "Run pre-commit and ansible-lint with inline errors and auto-fix via Quick Fix menu",
+  "version": "1.0.0",
   "engines": {
     "vscode": "^1.60.0"
   },
   "categories": [
-    "Visualization",
-    "Other"
+    "Linters",
+    "Formatters"
   ],
   "activationEvents": [
     "onLanguage:yaml",
     "onLanguage:ansible",
-    "onView:yamlIndentVisualizer.preview"
+    "onCommand:ansible-lint.run",
+    "onCommand:ansible-lint.runAll",
+    "onCommand:ansible-lint.runPreCommit",
+    "onCommand:ansible-lint.fixCurrent"
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "ansible-lint.run",
+        "title": "Ansible Lint: Run on Current File"
+      },
+      {
+        "command": "ansible-lint.runAll",
+        "title": "Ansible Lint: Run on All Files"
+      },
+      {
+        "command": "ansible-lint.runPreCommit",
+        "title": "Ansible Lint: Run pre-commit"
+      },
+      {
+        "command": "ansible-lint.fixCurrent",
+        "title": "Ansible Lint: Fix Current File"
+      },
+      {
+        "command": "ansible-lint.fixWithTool",
+        "title": "Ansible Lint: Fix with ansible-lint --fix"
+      },
+      {
+        "command": "ansible-lint.ignoreRule",
+        "title": "Ansible Lint: Ignore Rule"
+      }
+    ],
     "configuration": {
-      "title": "YAML Indent Visualizer",
+      "title": "Ansible Lint Helper",
       "properties": {
-        "yamlIndentVisualizer.highlightColor": {
+        "ansible-lint.executablePath": {
           "type": "string",
-          "default": "rgba(255, 215, 0, 0.3)",
-          "description": "Background color for highlighted parent keys."
+          "default": "",
+          "description": "Custom path to ansible-lint executable (leave empty for auto-detection)"
         },
-        "yamlIndentVisualizer.showRuler": {
+        "ansible-lint.preCommitPath": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to pre-commit executable (leave empty for auto-detection)"
+        },
+        "ansible-lint.autoFixOnSave": {
           "type": "boolean",
-          "default": true,
-          "description": "Show a subtle ruler line from parent to child."
+          "default": false,
+          "description": "Automatically fix issues when saving files"
         }
       }
     },
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "yaml-indent-explorer",
-          "title": "YAML Indent",
+          "id": "ansible-lint-explorer",
+          "title": "Ansible Lint",
           "icon": "resources/icon.svg"
         }
       ]
     },
     "views": {
-      "yaml-indent-explorer": [
+      "ansible-lint-explorer": [
         {
           "type": "webview",
-          "id": "yamlIndentVisualizer.preview",
-          "name": "Indent Preview"
+          "id": "ansible-lint.resultsPanel",
+          "name": "Lint Results"
         }
       ]
     }
@@ -59,6 +93,6 @@
   "devDependencies": {
     "@types/vscode": "^1.60.0",
     "@types/node": "^14.14.37",
-    "typescript": "^4.1.5"
+    "typescript": "^4.9.5"
   }
 }
