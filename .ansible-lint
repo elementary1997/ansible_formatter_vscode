@@ -3,7 +3,7 @@
 # Note: Line length (150 chars) is configured in .yamllint file
 profile: production
 
-# Excluded paths - служебные папки
+# Excluded paths - служебные папки и конфиги
 exclude_paths:
   - .ansible/
   - .cache/
@@ -23,6 +23,9 @@ exclude_paths:
   - test_extension/
   - docs/
   - "*.md"
+  - .yamllint
+  - .ansible-lint
+  - .pre-commit-config.yaml
 
 # Rules that will only warn
 warn_list:
