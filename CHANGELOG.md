@@ -2,6 +2,39 @@
 
 All notable changes to the "Ansible Lint Helper" extension will be documented in this file.
 
+## [1.0.5] - 2026-02-07
+
+### New Features
+
+#### 🌐 Bilingual Error Messages (EN/RU)
+- Every error now shows both English and Russian explanation
+- **EN:** and **RU:** text labels next to each message
+- Proper baseline alignment of labels with error text
+
+#### 🛡️ New Extension Icon
+- Shield with letter "A" icon in the Activity Bar
+
+#### 🔧 UI Scale Setting
+- New `ansible-lint.uiScale` setting (50–150%)
+- **Real-time update** — scale changes instantly without restart
+
+#### 🎨 UI Improvements
+- More compact error display with reduced padding
+- Error statistics with severity icons: ❌ Errors, ⚠️ Warnings, ℹ️ Info
+- Improved `[source]` badge contrast for better readability
+- Full file path shown on hover over file headers
+
+#### 📁 Default Config Improvements
+- Linter config files (`.yamllint`, `.ansible-lint`, `.pre-commit-config.yaml`) excluded from all checks by default
+- Default configs include common service directories in exclude lists
+
+### Bug Fixes
+- Fixed `ansible-lint --fix` exit code 8 (warnings) shown as error
+- Fixed HTML entities (`&nbsp;`) displayed as text in statistics
+- Removed unnecessary flag icons from language switcher
+
+---
+
 ## [1.0.4] - 2026-02-06
 
 ### New Features
@@ -147,10 +180,9 @@ All notable changes to the "Ansible Lint Helper" extension will be documented in
 - [ ] Auto-run on file save option
 - [ ] Custom rule severity mapping
 - [ ] Performance improvements for large workspaces
-- [ ] Error filtering by severity/source
+- [ ] Multi-root workspace support
 
 ### Planned for 1.2.0
 - [ ] Integration with VSCode Tasks
 - [ ] Watch mode for continuous linting
-- [ ] Multi-root workspace support
 - [ ] Export errors to file (JSON/CSV)
