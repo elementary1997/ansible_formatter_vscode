@@ -3,16 +3,26 @@
 # Note: Line length (150 chars) is configured in .yamllint file
 profile: production
 
-# Excluded paths
+# Excluded paths - служебные папки и конфиги
 exclude_paths:
+  - .ansible/
   - .cache/
+  - .git/
   - .github/
-  - .venv/
+  - .vscode/
+  - .idea/
+  - __pycache__/
+  - "*.egg-info/"
   - venv/
+  - .venv/
+  - env/
   - node_modules/
   - out/
-  - test_extension/
+  - dist/
   - build/
+  - test_extension/
+  - docs/
+  - "*.md"
   - .yamllint
   - .ansible-lint
   - .pre-commit-config.yaml
