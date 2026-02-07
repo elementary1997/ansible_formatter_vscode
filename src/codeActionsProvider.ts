@@ -245,6 +245,12 @@ async function ignoreYamllintRule(workspaceRoot: string, rule: string): Promise<
 extends: default
 
 rules:
+  line-length:
+    max: 150
+    level: warning
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no']
+    level: warning
 
 # Ignore patterns
 ignore: |
