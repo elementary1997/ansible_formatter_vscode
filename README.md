@@ -2,7 +2,7 @@
 
 VS Code extension for comprehensive Ansible code linting with inline errors, bilingual messages (EN/RU), and one-click auto-fix.
 
-![Version](https://img.shields.io/badge/version-1.0.4-blue)
+![Version](https://img.shields.io/badge/version-1.0.5-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![VS Code](https://img.shields.io/badge/vscode-%3E%3D1.60.0-blue)
 
